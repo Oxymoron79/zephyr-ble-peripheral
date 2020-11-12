@@ -47,12 +47,19 @@ static const struct bt_uuid_128 dataCharacteristic = BT_UUID_INIT_128(
 /*******************************************************************************
  * JSON
  ******************************************************************************/
-struct state_s { int foo; char *bar; };
-static struct json_obj_descr state_descr[] = {
-    JSON_OBJ_DESCR_PRIM(struct state_s, foo, JSON_TOK_NUMBER),
-    JSON_OBJ_DESCR_PRIM(struct state_s, bar, JSON_TOK_STRING),
+struct channel_s { char* name; int num; };
+static struct json_obj_descr channel_descr[] = {
+    JSON_OBJ_DESCR_PRIM(struct channel_s, name, JSON_TOK_STRING),
+    JSON_OBJ_DESCR_PRIM(struct channel_s, num, JSON_TOK_NUMBER),
 };
-struct state_s state = { .foo = 1, .bar = "bar" };
+#define MAX_CHANNELS 2
+struct state_s { char *name; int sn; struct channel_s channels[MAX_CHANNELS]; size_t channels_len;};
+static struct json_obj_descr state_descr[] = {
+    JSON_OBJ_DESCR_PRIM(struct state_s, name, JSON_TOK_STRING),
+    JSON_OBJ_DESCR_PRIM(struct state_s, sn, JSON_TOK_NUMBER),
+    JSON_OBJ_DESCR_OBJ_ARRAY(struct state_s, channels, MAX_CHANNELS, channels_len, channel_descr, ARRAY_SIZE(channel_descr))
+};
+static struct state_s state = { .name = "Test", .sn=1234, .channels = {{.name = "Ch1", .num=1}, {.name = "Ch2", .num=2}}, .channels_len = 2 };
 #define JSON_SIZE 1024
 static char json[JSON_SIZE];
 static ssize_t json_len = 0;
@@ -69,10 +76,15 @@ static ssize_t json_len = 0;
 static ssize_t readState(struct bt_conn *conn, const struct bt_gatt_attr *attr,
         void *buf, uint16_t len, uint16_t offset) {
     int err = 0;
-    /* Clear json buffer */
-    memset(json, 0, JSON_SIZE);
+    printk("Read State.\n");
+    printk("state.name: %s\n", state.name);
+    printk("state.sn: %d\n", state.sn);
+    printk("state.channels[0].name: %s\n", state.channels[0].name);
+    printk("state.channels[0].num: %d\n", state.channels[0].num);
+    printk("state.channels[1].name: %s\n", state.channels[1].name);
+    printk("state.channels[1].num: %d\n", state.channels[1].num);
     /* Calculate the length of the encoded JSON string */
-    json_len = json_calc_encoded_len(state_descr, 2, &state);
+    json_len = json_calc_encoded_len(state_descr, ARRAY_SIZE(state_descr), &state);
     printk("json calc len returned: %d\n", json_len);
     if (json_len > JSON_SIZE)
     {
@@ -80,7 +92,7 @@ static ssize_t readState(struct bt_conn *conn, const struct bt_gatt_attr *attr,
         return -1;
     }
     /* Encode state struct to json buffer */
-    err = json_obj_encode_buf(state_descr, 2, &state, json, JSON_SIZE);
+    err = json_obj_encode_buf(state_descr, ARRAY_SIZE(state_descr), &state, json, JSON_SIZE);
     if (err < 0)
     {
         printk("JSON encode failed: %d\n", err);
@@ -107,17 +119,24 @@ static ssize_t writeState(struct bt_conn *conn, const struct bt_gatt_attr *attr,
     if (flags & BT_GATT_WRITE_FLAG_PREPARE) {
         return 0;
     }
+    printk("Write State.\n");
     memset(json, 0, JSON_SIZE);
     memcpy(json, buf, len);
     printk("New \"State\" Characteristic Value: %s\n", json);
-    err = json_obj_parse(json, len, state_descr, 2,&state);
-    if (err <0)
+    err = json_obj_parse(json, len, state_descr, ARRAY_SIZE(state_descr), &state);
+    if (err < 0)
     {
         printk("Failed to parse JSON: %d\n", err);
         return -1;
     }
-    printk("state.foo: %d\n", state.foo);
-    printk("state.bar: %s\n", state.bar);
+    /* The char* of the state struct now point into the json buffer! */
+    printk("Parsed JSON: 0x%02x\n", err);
+    printk("state.name: %s\n", state.name);
+    printk("state.sn: %d\n", state.sn);
+    printk("state.channels[0].name: %s\n", state.channels[0].name);
+    printk("state.channels[0].num: %d\n", state.channels[0].num);
+    printk("state.channels[1].name: %s\n", state.channels[1].name);
+    printk("state.channels[1].num: %d\n", state.channels[1].num);
     return len;
 }
 
@@ -245,4 +264,34 @@ void main(void) {
     return;
   }
   printk("Advertising successfully started\n");
+
+
+  printk("state.name: %s\n", state.name);
+  printk("state.sn: %d\n", state.sn);
+  printk("state.channels[0].name: %s\n", state.channels[0].name);
+  printk("state.channels[0].num: %d\n", state.channels[0].num);
+  printk("state.channels[1].name: %s\n", state.channels[1].name);
+  printk("state.channels[1].num: %d\n", state.channels[1].num);
+  printk("state.channels_len: %d\n", state.channels_len);
+  printk("ARRAY_SIZE(state_descr): %d\n", ARRAY_SIZE(state_descr));
+  /* Calculate the length of the encoded JSON string */
+  json_len = json_calc_encoded_len(state_descr, ARRAY_SIZE(state_descr), &state);
+  printk("json calc len returned: %d\n", json_len);
+  if (json_len > JSON_SIZE)
+  {
+    printk("Encoded JSON is too long for the buffer\n");
+  }
+  else
+  {
+    /* Encode state struct to json buffer */
+    err = json_obj_encode_buf(state_descr, ARRAY_SIZE(state_descr), &state, json, JSON_SIZE);
+    if (err < 0)
+    {
+      printk("JSON encode failed: %d\n", err);
+    }
+    else
+    {
+      printk("JSON: %s\n", json);
+    }
+  }
 }

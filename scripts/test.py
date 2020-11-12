@@ -45,17 +45,16 @@ if __name__ == "__main__":
 
     print("Reading State Characteristic:")
     data = ble.readCharacteristic(stateCharacteristicId)
-    print("State: %s" % data)
+    print("State: %s" % bytearray(data).decode('utf-8'))
 
-    js = json.dumps({'foo': 1, 'bar': 'baz'})
+    js = json.dumps({'name': 'foo', 'sn': 5678, 'channels': [{'name': 'bar', 'num': 0}, {'name': 'baz', 'num':1}]})
     data = bytes(js, 'utf-8')
     print("Writing State Characteristic:", js)
     ble.writeCharacteristic(stateCharacteristicId, data)
 
-#     js = json.dumps([{'foo': 1}, {'foo': 2}])
-#     data = bytes(js, 'utf-8')
-#     print("Update State Characteristic:", js)
-#     ble.writeCharacteristic(stateCharacteristicId, data)
+    print("Reading State Characteristic:")
+    data = ble.readCharacteristic(stateCharacteristicId)
+    print("State: %s" % bytearray(data).decode('utf-8'))
 
     print("Disconnecting...")
     ble.disconnect()
