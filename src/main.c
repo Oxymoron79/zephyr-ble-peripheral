@@ -237,8 +237,21 @@ static void spec_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value
  */
 static ssize_t readCalib(struct bt_conn *conn, const struct bt_gatt_attr *attr,
         void *buf, uint16_t len, uint16_t offset) {
+	uint8_t* wr8 = buf;
+	ssize_t count = 0;
 	printk("readCalib\n");
-	return len;
+	for(int i = 0; i < NUM_CHANNELS; i++)
+	{
+		*wr8++ = NUM_RANGES;
+		for (int j = 0; j < NUM_RANGES; j++)
+		{
+			memcpy(wr8, &sensor.channels[i].ranges[j].calibrationFactor, sizeof(sensor.channels[i].ranges[j].calibrationFactor));
+			wr8 += sizeof(sensor.channels[i].ranges[j].calibrationFactor);
+		}
+	}
+	count = wr8 - ((uint8_t*)buf);
+	printk("readCalib: Wrote %d bytes.\n", count);
+	return count;
 }
 
 
@@ -254,10 +267,25 @@ static ssize_t readCalib(struct bt_conn *conn, const struct bt_gatt_attr *attr,
  */
 static ssize_t writeCalib(struct bt_conn *conn, const struct bt_gatt_attr *attr,
         const void *buf, uint16_t len, uint16_t offset, uint8_t flags) {
+	const uint8_t* rd8 = buf;
+	int numRanges;
+	ssize_t count = 0;
 	if (flags & BT_GATT_WRITE_FLAG_PREPARE) {
 		return 0;
 	}
 	printk("writeCalib\n");
+	for(int i = 0; i < NUM_CHANNELS; i++)
+	{
+		numRanges = *rd8++;
+		for (int j = 0; j < numRanges; j++)
+		{
+			memcpy(&sensor.channels[i].ranges[j].calibrationFactor, rd8, sizeof(sensor.channels[i].ranges[j].calibrationFactor));
+			rd8 += sizeof(sensor.channels[i].ranges[j].calibrationFactor);
+		}
+	}
+	count = rd8 - ((uint8_t*)buf);
+	printk("writeCalib: Read %d bytes.\n", count);
+	printSensor();
 	return len;
 }
 

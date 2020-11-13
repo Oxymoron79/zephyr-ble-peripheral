@@ -40,7 +40,7 @@ if __name__ == "__main__":
     print("-----------")
     wrcdServiceId = ble.getServiceIdFromUuid("00000100-f5bf-58d5-9d17-172177d1316a")
     print("ID of WRCD Service: %s" % wrcdServiceId)
-    
+
     specCharacteristicId = ble.getCharacteristicIdFromUuid("00000101-f5bf-58d5-9d17-172177d1316a")
     print("ID of spec Characteristic: %s" % specCharacteristicId)
 
@@ -62,6 +62,29 @@ if __name__ == "__main__":
     data = bytearray(ble.readCharacteristic(specCharacteristicId))
     print("Read %d bytes: %s" % (len(data), data))
     print("  unpack: ", struct.unpack('<' + 4*'8s8sb8I', data))
+
+    print("-----------")
+    calibCharacteristicId = ble.getCharacteristicIdFromUuid("00000102-f5bf-58d5-9d17-172177d1316a")
+    print("ID of calib Characteristic: %s" % calibCharacteristicId)
+
+    print("Reading calib Characteristic:")
+    data = bytearray(ble.readCharacteristic(calibCharacteristicId))
+    print("Read %d bytes: %s" % (len(data), data))
+    print("  unpack: ", struct.unpack('<' + 4*'b4d', data))
+
+    data = struct.pack('<' + 4*'b4d',
+                       4, 2*1.1, 2*2.1, 2*3.1, 2*4.1,
+                       4, 2*1.2, 2*2.2, 2*3.2, 2*4.2,
+                       4, 2*1.3, 2*2.3, 2*3.3, 2*4.3,
+                       4, 2*1.4, 2*2.4, 2*3.4, 2*4.4
+                       )
+    print("Writing calib Characteristic:", data)
+    ble.writeCharacteristic(calibCharacteristicId, data)
+
+    print("Reading back calib Characteristic:")
+    data = bytearray(ble.readCharacteristic(calibCharacteristicId))
+    print("Read %d bytes: %s" % (len(data), data))
+    print("  unpack: ", struct.unpack('<' + 4*'b4d', data))
 
     print("Disconnecting...")
     ble.disconnect()
