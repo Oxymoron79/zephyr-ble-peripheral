@@ -5,6 +5,7 @@ from pprint import *
 import json
 import ble
 from ble_helper import *
+import struct
 
 if __name__ == "__main__":
     name = "Rsc"
@@ -40,21 +41,27 @@ if __name__ == "__main__":
     wrcdServiceId = ble.getServiceIdFromUuid("00000100-f5bf-58d5-9d17-172177d1316a")
     print("ID of WRCD Service: %s" % wrcdServiceId)
     
-    stateCharacteristicId = ble.getCharacteristicIdFromUuid("00000101-f5bf-58d5-9d17-172177d1316a")
-    print("ID of State Characteristic: %s" % stateCharacteristicId)
+    specCharacteristicId = ble.getCharacteristicIdFromUuid("00000101-f5bf-58d5-9d17-172177d1316a")
+    print("ID of spec Characteristic: %s" % specCharacteristicId)
 
-    print("Reading State Characteristic:")
-    data = ble.readCharacteristic(stateCharacteristicId)
-    print("State: %s" % bytearray(data).decode('utf-8'))
+    print("Reading spec Characteristic:")
+    data = bytearray(ble.readCharacteristic(specCharacteristicId))
+    print("Read %d bytes: %s" % (len(data), data))
+    print("  unpack: ", struct.unpack('<' + 4*'8s8sb8I', data))
 
-    js = json.dumps({'name': 'foo', 'sn': 5678, 'channels': [{'name': 'bar', 'num': 0}, {'name': 'baz', 'num':1}]})
-    data = bytes(js, 'utf-8')
-    print("Writing State Characteristic:", js)
-    ble.writeCharacteristic(stateCharacteristicId, data)
+    data = struct.pack('<' + 4*'8s8sb8I',
+                       b'Mz     \x00', b'Nm     \x00', 4, 2*110, 2*1100, 2*120, 2*1200, 2*130, 2*1300, 2*140, 2*1400,
+                       b'Fx     \x00', b'N      \x00', 4, 2*210, 2*2100, 2*220, 2*2200, 2*230, 2*2300, 2*240, 2*2400,
+                       b'Fy     \x00', b'N      \x00', 4, 2*310, 2*3100, 2*320, 2*3200, 2*330, 2*3300, 2*340, 2*3400,
+                       b'Fz     \x00', b'N      \x00', 4, 2*410, 2*4100, 2*420, 2*4200, 2*430, 2*4300, 2*440, 2*4400
+                       )
+    print("Writing Spec Characteristic:", data)
+    ble.writeCharacteristic(specCharacteristicId, data)
 
-    print("Reading State Characteristic:")
-    data = ble.readCharacteristic(stateCharacteristicId)
-    print("State: %s" % bytearray(data).decode('utf-8'))
+    print("Reading back Spec Characteristic:")
+    data = bytearray(ble.readCharacteristic(specCharacteristicId))
+    print("Read %d bytes: %s" % (len(data), data))
+    print("  unpack: ", struct.unpack('<' + 4*'8s8sb8I', data))
 
     print("Disconnecting...")
     ble.disconnect()
