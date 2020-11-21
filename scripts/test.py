@@ -11,10 +11,9 @@ from unittest.case import skip
 class TestCase01_BluezModule(unittest.TestCase):
     def test_01_Exports(self):
         # When
-        bluez.start()
-        l = len(bluez.objects)
-        a = bluez.get_adapter()
-        bluez.stop()
+        manager = bluez.Manager()
+        l = len(manager._objects)
+        a = manager.get_adapter()
         
         # Then
         self.assertGreater(l, 0)
@@ -22,26 +21,22 @@ class TestCase01_BluezModule(unittest.TestCase):
 class TestCase02_AdapterClass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bluez.start()
+        cls.manager = bluez.Manager()
     
-    @classmethod
-    def tearDownClass(cls):
-        bluez.stop()
-
     def test_01_GetFirst(self):
-        bluez.get_adapter()
+        self.manager.get_adapter()
     
     def test_02_GetByName(self):
-        bluez.get_adapter('hci0')
+        self.manager.get_adapter('hci0')
     
     def test_03_GetException(self):
         with self.assertRaises(Exception):
-            bluez.get_adapter('Invalid')
+            self.manager.get_adapter('Invalid')
     
     def test_04_Discovery(self):
         # Given
         duration = 2
-        a = bluez.get_adapter()
+        a = self.manager.get_adapter()
           
         # When
         a.start_discovery();
@@ -57,51 +52,39 @@ class TestCase02_AdapterClass(unittest.TestCase):
           
         # Then
         self.assertFalse(a.Discovering)
-    
-    def test_05_DiscoverByUUID(self):
-        # Given
-        duration = 2
-        uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
-        uuid = '12345678-1234-5678-1234-56789abcdef0'
-        a = bluez.get_adapter()
-        
-        # When
-        a.start_discovery({'UUIDs': [uuid]});
-        time.sleep(duration)
-        d = a.get_devices()
-        
-        # Then
-        self.assertTrue(a.Discovering)
-        self.assertGreater(len(d), 0, 'No devices discovered within {} seconds.'.format(duration))
-        self.assertTrue(uuid in d[0].UUIDs, 'Discovered device does not advertise {}. It advertised '.format(uuid, d[0].UUIDs))
-        
-        # When
-        a.stop_discovery();
-        
-        # Then
-        self.assertFalse(a.Discovering)
 
 class TestCase03_DeviceClass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bluez.start()
-        cls.adapter = bluez.get_adapter()
+        cls.manager = bluez.Manager()
+        cls.adapter = cls.manager.get_adapter()
     
-    @classmethod
-    def tearDownClass(cls):
-        bluez.stop()
-
-    def test_01_GetFirst(self):
+    def test_01_GetAll(self):
         # Given
         duration = 2
         uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
         uuid = '12345678-1234-5678-1234-56789abcdef0'
         
         # When
-        self.adapter.start_discovery({'UUIDs': [uuid]});
+        self.adapter.start_discovery()
         time.sleep(duration)
         d = self.adapter.get_devices()
-        a.stop_discovery();
+        self.adapter.stop_discovery();
+        
+        # Then
+        self.assertGreater(len(d), 0, 'No devices discovered within {} seconds.'.format(duration))
+    
+    def test_01_GetByServiceUUID(self):
+        # Given
+        duration = 2
+        service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
+        service_uuid = '12345678-1234-5678-1234-56789abcdef0'
+        
+        # When
+        self.adapter.start_discovery()
+        time.sleep(duration)
+        d = self.adapter.get_devices(service_uuid)
+        self.adapter.stop_discovery();
         
         # Then
         self.assertGreater(len(d), 0, 'No devices discovered within {} seconds.'.format(duration))
