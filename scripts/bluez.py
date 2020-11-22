@@ -220,6 +220,27 @@ class Adapter(_BaseObject):
         if not serviceUUID:
             return devices
         return [d for d in devices if serviceUUID in d.UUIDs]
+    
+    def discover_device(self, check_fn, timeout_ms=10000):
+        for device in self.get_devices():
+            if check_fn(device):
+                return device
+        __logger__.debug('%s: Start discovering.', self._proxy.get_object_path())
+        self.start_discovery()
+        try:
+            def check_object(device):
+                return check_fn(Device(self._bluez, device.get_object_path(), BLUEZ_DEVICE_INTERFACE))
+            self._wait_object_added(BLUEZ_DEVICE_INTERFACE, check_object, timeout_ms)
+        except BaseException as e:
+            print('discover_device: Caught exception: {}'.format(e))
+            return None
+        finally:
+            __logger__.debug('%s: Stop discovering.', self._proxy.get_object_path())
+            self.stop_discovery()
+        for device in self.get_devices():
+            if check_fn(device):
+                return device
+        return None
 
 class Manager:
     class _MainLoop(threading.Thread):
@@ -288,28 +309,18 @@ if __name__ == "__main__":
         print(len(mgr._objects), 'objects: ', repr(mgr._objects))
         a = mgr.get_adapter('hci0')
         print('Adapter', a.Name, a.Address)
-        
-        if not a.Discovering:
-            print('Start discovery')
-            a.start_discovery()
-            
-            print('Sleep for 2 sec.')
-            time.sleep(2)
-            
-            print('Stop discovery')
-            a.stop_discovery()
-        
-        devices = a.get_devices(serviceUUID='12345678-1234-5678-1234-56789abcdef0')
-        print('Discovered devices:', repr(devices))
-        
-        if len(devices) > 0:
-            d = devices[0]
-            print('Connect to', d)
-            d.connect()
+        def check(device):
+            uuids = device.UUIDs
+            __logger__.debug('Check UUIDs: %s', uuids)
+            return '12345678-1234-5678-1234-56789abcdef0' in uuids
+        device = a.discover_device(check)
+        if device:
+            print('Connect to', device)
+            device.connect()
             print('Done.')
             
-            print('Disconnect', d)
-            d.disconnect()
+            print('Disconnect', device)
+            device.disconnect()
             print('Done.')
     except BaseException as e:
         print('Caught exception: {}'.format(e))
