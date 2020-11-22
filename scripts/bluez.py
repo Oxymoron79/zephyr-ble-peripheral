@@ -63,6 +63,41 @@ class _BaseObject:
             raise Exception('Timeout')
         GLib.source_remove(tmo)
     
+    def __wait_object_added(self, om, object):
+        if self.__wait_condition:
+            ifname = self.__wait_condition['interface']
+            iface = None
+            for i in object.get_interfaces():
+                if i.get_interface_name() == ifname:
+                    iface = i
+            if iface and self.__wait_condition['check'](iface):
+                cv = self.__wait_condition['cv']
+                with cv:
+                    cv.notifyAll()
+    
+    def __wait_object_timeout(self):
+        if self.__wait_condition:
+            self.__wait_condition['timeout'] = True
+            cv = self.__wait_condition['cv']
+            with cv:
+                cv.notifyAll()
+        return False
+    
+    def _wait_object_added(self, interface_name, check_fn, timeout_ms=10000):
+        cv = threading.Condition()
+        assert self.__wait_condition is None
+        self.__wait_condition = {'cv': cv, 'timeout': False, 'interface': interface_name, 'check': check_fn}
+        oa = self._bluez._om.connect('object-added', self.__wait_object_added)
+        tmo = GLib.timeout_add(timeout_ms, self.__wait_object_timeout)
+        with cv:
+            cv.wait()
+        self._bluez._om.disconnect(oa)
+        timeout = self.__wait_condition['timeout']
+        self.__wait_condition = None
+        if timeout:
+            raise Exception('Timeout')
+        GLib.source_remove(tmo)
+    
     def _get_property(self, name):
         return self._proxy.get_cached_property(name)
 
