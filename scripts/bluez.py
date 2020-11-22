@@ -16,7 +16,7 @@ class _BaseObject:
     def __init__(self, bluez, object_path, interface_name):
         self._bluez = bluez
         self._proxy = bluez._om.get_interface(object_path, interface_name)
-        self.__wait_condition = {}
+        self.__wait_condition = None
         self._proxy.connect('g-properties-changed', self.__properties_changed_log)
     
     def __repr__(self):
@@ -34,30 +34,31 @@ class _BaseObject:
         __logger__.debug('%s: Properties changed: %s', proxy.get_object_path(), changed.print_(True))
     
     def __wait_property_changed(self, proxy, changed, invalidated):
-        for k in changed.keys():
-            if k in self.__wait_condition.keys() and self.__wait_condition[k]['check'](changed.lookup_value(k).unpack()):
-                cv = self.__wait_condition[k]['cv']
+        if self.__wait_condition:
+            if self.__wait_condition['check'](changed):
+                cv = self.__wait_condition['cv']
                 with cv:
                     cv.notifyAll()
     
-    def __wait_property_timeout(self, property):
-        if property in self.__wait_condition.keys():
-            self.__wait_condition[property]['timeout'] = True
-            cv = self.__wait_condition[property]['cv']
+    def __wait_property_timeout(self):
+        if self.__wait_condition:
+            self.__wait_condition['timeout'] = True
+            cv = self.__wait_condition['cv']
             with cv:
                 cv.notifyAll()
         return False
     
-    def _wait_property_change(self, property, check_fn, timeout_ms=1000):
+    def _wait_property_change(self, check_fn, timeout_ms=1000):
         cv = threading.Condition()
-        self.__wait_condition[property] = {'cv': cv, 'timeout': False, 'check': check_fn}
+        assert self.__wait_condition is None
+        self.__wait_condition = {'cv': cv, 'timeout': False, 'check': check_fn}
         pc = self._proxy.connect('g-properties-changed', self.__wait_property_changed)
-        tmo = GLib.timeout_add(timeout_ms, self.__wait_property_timeout, property)
+        tmo = GLib.timeout_add(timeout_ms, self.__wait_property_timeout)
         with cv:
             cv.wait()
         self._proxy.disconnect(pc)
-        timeout = self.__wait_condition[property]['timeout']
-        self.__wait_condition.pop(property, None)
+        timeout = self.__wait_condition['timeout']
+        self.__wait_condition = None
         if timeout:
             raise Exception('Timeout')
         GLib.source_remove(tmo)
@@ -98,21 +99,27 @@ class Device(_BaseObject):
             __logger__.info('%s: Already connected.', self._proxy.get_object_path())
             return
         self._proxy.Connect()
-        def check(connected):
-            return connected
+        def check(properties):
+            value = properties.lookup_value('ServicesResolved')
+            if value is None:
+                return False
+            return value.get_boolean()
         if wait_for_services:
-            self._wait_property_change('ServicesResolved', check, timeout_ms)
+            self._wait_property_change(check, timeout_ms)
         else:
-            self._wait_property_change('Connected', check, timeout_ms)
+            self._wait_property_change(check, timeout_ms)
      
     def disconnect(self, timeout_ms=10000):
         if not self.Connected:
             __logger__.info('%s: Not connected.', self._proxy.get_object_path())
             return
-        def check(connected):
-            return not connected
+        def check(properties):
+            value = properties.lookup_value('Connected')
+            if value is None:
+                return False
+            return not value.get_boolean()
         self._proxy.Disconnect()
-        self._wait_property_change('Connected', check, timeout_ms)
+        self._wait_property_change(check, timeout_ms)
 
 class Adapter(_BaseObject):
     def __init__(self, bluez, object_path, interface_name):
@@ -139,10 +146,13 @@ class Adapter(_BaseObject):
             __logger__.info('%s: Already discovering.', self._proxy.get_object_path())
             return
         try:
-            def check(discovering):
-                return discovering
+            def check(properties):
+                value = properties.lookup_value('Discovering')
+                if value is None:
+                    return False
+                return value.get_boolean()
             self._proxy.StartDiscovery()
-            self._wait_property_change('Discovering', check)
+            self._wait_property_change(check)
         except BaseException as e:
             __logger__.error('%s: StartDiscovery failed: %s', self._proxy.get_object_path(), e)
     
@@ -155,10 +165,13 @@ class Adapter(_BaseObject):
             __logger__.info('%s: Not discovering.', self._proxy.get_object_path())
             return
         try:
-            def check(discovering):
-                return not discovering
+            def check(properties):
+                value = properties.lookup_value('Discovering')
+                if value is None:
+                    return False
+                return not value.get_boolean()
             self._proxy.StopDiscovery()
-            self._wait_property_change('Discovering', check)
+            self._wait_property_change(check)
         except BaseException as e:
             __logger__.error('%s: StopDiscovery failed: %s', self._proxy.get_object_path(), e)
     
