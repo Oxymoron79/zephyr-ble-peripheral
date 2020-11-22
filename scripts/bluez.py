@@ -101,60 +101,64 @@ class _BaseObject:
     def _get_property(self, name):
         return self._proxy.get_cached_property(name)
 
-class Device(_BaseObject):
-    def __init__(self, bluez, object_path, interface_name):
-        super().__init__(bluez, object_path, interface_name)
+class Manager:
+    class _MainLoop(threading.Thread):
+        def __init__(self):
+            super().__init__()
+            self.loop = GLib.MainLoop()
+        
+        def run(self):
+            self.loop.run()
+        
+        def stop(self):
+            self.loop.quit()
 
-    @property
-    def Address(self):
-        return self._get_property('Address').unpack()
-     
-    @property
-    def Name(self):
-        return self._get_property('Name').unpack()
-     
-    @property
-    def RSSI(self):
-        return self._get_property('RSSI').unpack()
-     
-    @property
-    def Connected(self):
-        return self._get_property('Connected').unpack()
-     
-    @property
-    def UUIDs(self):
-        return self._get_property('UUIDs').unpack()
-     
-    @property
-    def ServicesResolved(self):
-        return self._get_property('ServicesResolved')
-     
-    def connect(self, wait_for_services=True, timeout_ms=10000):
-        if self.Connected:
-            __logger__.info('%s: Already connected.', self._proxy.get_object_path())
-            return
-        self._proxy.Connect()
-        def check(properties):
-            value = properties.lookup_value('ServicesResolved')
-            if value is None:
-                return False
-            return value.get_boolean()
-        if wait_for_services:
-            self._wait_property_change(check, timeout_ms)
-        else:
-            self._wait_property_change(check, timeout_ms)
-     
-    def disconnect(self, timeout_ms=10000):
-        if not self.Connected:
-            __logger__.info('%s: Not connected.', self._proxy.get_object_path())
-            return
-        def check(properties):
-            value = properties.lookup_value('Connected')
-            if value is None:
-                return False
-            return not value.get_boolean()
-        self._proxy.Disconnect()
-        self._wait_property_change(check, timeout_ms)
+    def __init__(self):
+        self._mainloop = self._MainLoop()
+        self._mainloop.daemon = True
+        self._mainloop.start()
+        # https://lazka.github.io/pgi-docs/Gio-2.0/classes/DBusObjectManager.html
+        self._om = Gio.DBusObjectManagerClient.new_for_bus_sync(bus_type=Gio.BusType.SYSTEM,
+                                                                flags=Gio.DBusProxyFlags.NONE,
+                                                                name=BLUEZ_BUS_NAME,
+                                                                object_path='/',
+                                                                get_proxy_type_func=None,
+                                                                get_proxy_type_user_data=None,
+                                                                cancellable=None)
+        self._om.connect('object-added', self.__object_added)
+        self._om.connect('object-removed', self.__object_removed)
+        self._objects = {}
+        for o in self._om.get_objects():
+            self._objects[o.get_object_path()] = [i.get_interface_name() for i in o.get_interfaces()]
+    
+    def __object_added(self, om, object):
+        p = object.get_object_path()
+        ifs = [i.get_interface_name() for i in object.get_interfaces()]
+        self._objects[p] = ifs
+        __logger__.debug('Object added: %s: %s', p, str(ifs))
+    
+    def __object_removed(self, om,  object):
+        p = object.get_object_path()
+        self._objects.pop(p, None)
+        __logger__.debug('Object removed: %s', p)
+    
+    def get_adapter(self, pattern=None):
+        """Returns the first bluetooth adapter found.
+        
+        :Parameters:
+            `pattern` : str
+                A adapter name (e.g. hci0) or address (XX:XX:XX:XX:XX:XX)
+        
+        :Returns: a `bluez.Adapter`
+        :Raises `Exception`: if there are no bluetooth adapters available or none matched the `pattern`
+        """
+        for path, ifaces in self._objects.items():
+            if BLUEZ_ADAPTER_INTERFACE not in ifaces:
+                continue
+            adapter = Adapter(self, path, BLUEZ_ADAPTER_INTERFACE)
+            if not pattern or path.endswith(pattern) or pattern == adapter.Address:
+                return adapter
+        raise Exception("No bluetooth adapter found")
 
 class Adapter(_BaseObject):
     def __init__(self, bluez, object_path, interface_name):
@@ -242,64 +246,60 @@ class Adapter(_BaseObject):
                 return device
         return None
 
-class Manager:
-    class _MainLoop(threading.Thread):
-        def __init__(self):
-            super().__init__()
-            self.loop = GLib.MainLoop()
-        
-        def run(self):
-            self.loop.run()
-        
-        def stop(self):
-            self.loop.quit()
+class Device(_BaseObject):
+    def __init__(self, bluez, object_path, interface_name):
+        super().__init__(bluez, object_path, interface_name)
 
-    def __init__(self):
-        self._mainloop = self._MainLoop()
-        self._mainloop.daemon = True
-        self._mainloop.start()
-        # https://lazka.github.io/pgi-docs/Gio-2.0/classes/DBusObjectManager.html
-        self._om = Gio.DBusObjectManagerClient.new_for_bus_sync(bus_type=Gio.BusType.SYSTEM,
-                                                                flags=Gio.DBusProxyFlags.NONE,
-                                                                name=BLUEZ_BUS_NAME,
-                                                                object_path='/',
-                                                                get_proxy_type_func=None,
-                                                                get_proxy_type_user_data=None,
-                                                                cancellable=None)
-        self._om.connect('object-added', self.__object_added)
-        self._om.connect('object-removed', self.__object_removed)
-        self._objects = {}
-        for o in self._om.get_objects():
-            self._objects[o.get_object_path()] = [i.get_interface_name() for i in o.get_interfaces()]
-    
-    def __object_added(self, om, object):
-        p = object.get_object_path()
-        ifs = [i.get_interface_name() for i in object.get_interfaces()]
-        self._objects[p] = ifs
-        __logger__.debug('Object added: %s: %s', p, str(ifs))
-    
-    def __object_removed(self, om,  object):
-        p = object.get_object_path()
-        self._objects.pop(p, None)
-        __logger__.debug('Object removed: %s', p)
-    
-    def get_adapter(self, pattern=None):
-        """Returns the first bluetooth adapter found.
-        
-        :Parameters:
-            `pattern` : str
-                A adapter name (e.g. hci0) or address (XX:XX:XX:XX:XX:XX)
-        
-        :Returns: a `bluez.Adapter`
-        :Raises `Exception`: if there are no bluetooth adapters available or none matched the `pattern`
-        """
-        for path, ifaces in self._objects.items():
-            if BLUEZ_ADAPTER_INTERFACE not in ifaces:
-                continue
-            adapter = Adapter(self, path, BLUEZ_ADAPTER_INTERFACE)
-            if not pattern or path.endswith(pattern) or pattern == adapter.Address:
-                return adapter
-        raise Exception("No bluetooth adapter found")
+    @property
+    def Address(self):
+        return self._get_property('Address').unpack()
+     
+    @property
+    def Name(self):
+        return self._get_property('Name').unpack()
+     
+    @property
+    def RSSI(self):
+        return self._get_property('RSSI').unpack()
+     
+    @property
+    def Connected(self):
+        return self._get_property('Connected').unpack()
+     
+    @property
+    def UUIDs(self):
+        return self._get_property('UUIDs').unpack()
+     
+    @property
+    def ServicesResolved(self):
+        return self._get_property('ServicesResolved')
+     
+    def connect(self, wait_for_services=True, timeout_ms=10000):
+        if self.Connected:
+            __logger__.info('%s: Already connected.', self._proxy.get_object_path())
+            return
+        self._proxy.Connect()
+        def check(properties):
+            value = properties.lookup_value('ServicesResolved')
+            if value is None:
+                return False
+            return value.get_boolean()
+        if wait_for_services:
+            self._wait_property_change(check, timeout_ms)
+        else:
+            self._wait_property_change(check, timeout_ms)
+     
+    def disconnect(self, timeout_ms=10000):
+        if not self.Connected:
+            __logger__.info('%s: Not connected.', self._proxy.get_object_path())
+            return
+        def check(properties):
+            value = properties.lookup_value('Connected')
+            if value is None:
+                return False
+            return not value.get_boolean()
+        self._proxy.Disconnect()
+        self._wait_property_change(check, timeout_ms)
 
 if __name__ == "__main__":
     from pprint import pprint
