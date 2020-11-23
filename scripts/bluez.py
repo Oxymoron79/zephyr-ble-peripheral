@@ -119,7 +119,7 @@ class Manager:
         self._mainloop.start()
         # https://lazka.github.io/pgi-docs/Gio-2.0/classes/DBusObjectManager.html
         self._om = Gio.DBusObjectManagerClient.new_for_bus_sync(bus_type=Gio.BusType.SYSTEM,
-                                                                flags=Gio.DBusProxyFlags.NONE,
+                                                                flags=Gio.DBusObjectManagerClientFlags.NONE,
                                                                 name=BLUEZ_BUS_NAME,
                                                                 object_path='/',
                                                                 get_proxy_type_func=None,
