@@ -11,6 +11,8 @@ DBUS_PROPERTIES_INTERFACE = 'org.freedesktop.DBus.Properties'
 BLUEZ_BUS_NAME = 'org.bluez'
 BLUEZ_ADAPTER_INTERFACE = BLUEZ_BUS_NAME + '.Adapter1'
 BLUEZ_DEVICE_INTERFACE = BLUEZ_BUS_NAME + '.Device1'
+BLUEZ_GATTSERVICE_INTERFACE = BLUEZ_BUS_NAME + '.GattService1'
+BLUEZ_GATTCHARACTERISTIC_INTERFACE = BLUEZ_BUS_NAME + '.GattCharacteristic1'
 
 class _BaseObject:
     def __init__(self, bluez, object_path, interface_name):
@@ -300,6 +302,78 @@ class Device(_BaseObject):
             return not value.get_boolean()
         self._proxy.Disconnect()
         self._wait_property_change(check, timeout_ms)
+    
+    def get_gattservices(self):
+        """Get all GATT services associated with the device.
+         
+        :Returns: `{ str: bluez.GattService }`
+        """
+        services = [GattService(self._bluez, path, BLUEZ_GATTSERVICE_INTERFACE) for path, ifaces in self._bluez._objects.items()
+                   if path.startswith(self._proxy.get_object_path()) and BLUEZ_GATTSERVICE_INTERFACE in ifaces]
+        return {s.UUID: s for s in services}
+
+class GattService(_BaseObject):
+    def __init__(self, bluez, object_path, interface_name):
+        super().__init__(bluez, object_path, interface_name)
+    
+    @property
+    def Primary(self):
+        return self._get_property('Primary').unpack()
+    
+    @property
+    def UUID(self):
+        return self._get_property('UUID').unpack()
+    
+    def get_gattcharacteristics(self):
+        """Get all GATT characteristics associated with the gatt service.
+         
+        :Returns: `{ str: bluez.GattCharacteristic }`
+        """
+        characteristics = [GattCharacteristic(self._bluez, path, BLUEZ_GATTCHARACTERISTIC_INTERFACE) for path, ifaces in self._bluez._objects.items()
+                           if path.startswith(self._proxy.get_object_path()) and BLUEZ_GATTCHARACTERISTIC_INTERFACE in ifaces]
+        return {c.UUID: c for c in characteristics}
+
+class GattCharacteristic(_BaseObject):
+    OPTION_REQUEST = GLib.Variant.parse(None, "{'type': <'request'>}")
+    def __init__(self, bluez, object_path, interface_name):
+        super().__init__(bluez, object_path, interface_name)
+    
+    @property
+    def UUID(self):
+        return self._get_property('UUID').unpack()
+    
+    @property
+    def Flags(self):
+        return self._get_property('Flags').unpack()
+    
+    @property
+    def Notifying(self):
+        return self._get_property('Notifying').unpack()
+    
+    @property
+    def NotifyAcquired(self):
+        return self._get_property('NotifyAcquired').unpack()
+    
+    @property
+    def WriteAcquired(self):
+        return self._get_property('WriteAcquired').unpack()
+    
+    @property
+    def Value(self):
+        return self._get_property('Value').unpack()
+    
+    def StartNotify(self):
+        return self._proxy.StartNotify()
+    
+    def StopNotify(self):
+        return self._proxy.StopNotify()
+    
+    def ReadValue(self):
+        return self._proxy.call_sync('ReadValue', GLib.Variant.new_tuple(self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
+    
+    def WriteValue(self, data):
+        v = GLib.Variant('ay', bytearray(data))
+        return self._proxy.call_sync('WriteValue', GLib.Variant.new_tuple(v, self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
 
 if __name__ == "__main__":
     from pprint import pprint
@@ -309,19 +383,41 @@ if __name__ == "__main__":
         print(len(mgr._objects), 'objects: ', repr(mgr._objects))
         a = mgr.get_adapter('hci0')
         print('Adapter', a.Name, a.Address)
+        
+        serviceUUID = '00000100-f5bf-58d5-9d17-172177d1316a'
         def check(device):
             uuids = device.UUIDs
-            __logger__.debug('Check UUIDs: %s', uuids)
-            return '12345678-1234-5678-1234-56789abcdef0' in uuids
+            print('Check UUIDs:', uuids)
+            return serviceUUID in uuids
         device = a.discover_device(check)
         if device:
             print('Connect to', device)
             device.connect()
             print('Done.')
             
+            services = device.get_gattservices();
+            print('GATT services:', services)
+            if serviceUUID in services.keys():
+                service = services[serviceUUID]
+                
+                chars = service.get_gattcharacteristics()
+                print('GATT characteristics:', repr(chars))
+                configCharUUID = '00000101-f5bf-58d5-9d17-172177d1316a'
+                configChar = chars[configCharUUID]
+                if configChar:
+                    print('Read ', configCharUUID)
+                    data = configChar.ReadValue()
+                    print('-> ', data)
+                    
+                    data = b'hello'
+                    print('Write to', configCharUUID, data)
+                    ret = configChar.WriteValue(data)
+                    print('->', ret)
+            
             print('Disconnect', device)
             device.disconnect()
             print('Done.')
     except BaseException as e:
         print('Caught exception: {}'.format(e))
+        raise e
     print('Exit')
