@@ -33,7 +33,7 @@ class TestCase02_AdapterClass(unittest.TestCase):
         with self.assertRaises(Exception):
             self.manager.get_adapter('Invalid')
     
-    def test_04_Discovery(self):
+    def test_04_DiscoverAll(self):
         # Given
         duration = 2
         a = self.manager.get_adapter()
@@ -51,6 +51,38 @@ class TestCase02_AdapterClass(unittest.TestCase):
         a.stop_discovery();
           
         # Then
+        self.assertFalse(a.Discovering)
+    
+    def test_05_DiscoverAdvertisedUUID(self):
+        # Given
+        a = self.manager.get_adapter()
+        timeout = 5000
+        service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
+        def check(device):
+            uuids = device.UUIDs
+            return service_uuid in uuids
+        
+        # When
+        device = a.discover_device(check, timeout)
+        
+        # Then
+        self.assertTrue(device is not None, 'No devices advertising UUID {} discovered within {} milliseconds.'.format(service_uuid, timeout))
+        self.assertFalse(a.Discovering)
+    
+    def test_06_DiscoverAdvertisedUUIDTimeout(self):
+        # Given
+        a = self.manager.get_adapter()
+        timeout = 2000
+        service_uuid = '12345678-1234-5678-1234-56789abcdef0'
+        def check(device):
+            uuids = device.UUIDs
+            return service_uuid in uuids
+        
+        # When
+        device = a.discover_device(check, timeout)
+        
+        # Then
+        self.assertTrue(device is None, 'Devices advertising UUID {} discovered within {} milliseconds.'.format(service_uuid, timeout))
         self.assertFalse(a.Discovering)
 
 class TestCase03_DeviceClass(unittest.TestCase):
