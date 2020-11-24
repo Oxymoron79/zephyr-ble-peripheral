@@ -281,15 +281,19 @@ class Device(_BaseObject):
             __logger__.info('%s: Already connected.', self._proxy.get_object_path())
             return
         self._proxy.Connect()
+        if self.Connected:
+            if not wait_for_services:
+                return
         def check(properties):
-            value = properties.lookup_value('ServicesResolved')
+            value = None
+            if wait_for_services:
+                value = properties.lookup_value('ServicesResolved')
+            else:
+                value = properties.lookup_value('Connected')
             if value is None:
                 return False
             return value.get_boolean()
-        if wait_for_services:
-            self._wait_property_change(check, timeout_ms)
-        else:
-            self._wait_property_change(check, timeout_ms)
+        self._wait_property_change(check, timeout_ms)
      
     def disconnect(self, timeout_ms=10000):
         if not self.Connected:
