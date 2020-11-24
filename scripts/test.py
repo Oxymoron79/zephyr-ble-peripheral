@@ -90,36 +90,67 @@ class TestCase03_DeviceClass(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = bluez.Manager()
         cls.adapter = cls.manager.get_adapter()
+        cls.service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
+        timeout = 2000
+        def check(device):
+            uuids = device.UUIDs
+            return cls.service_uuid in uuids
+        cls.device = cls.adapter.discover_device(check, timeout)
+        assert cls.device is not None
+        assert cls.device.Connected is False
     
-    def test_01_GetAll(self):
+    def test_01_ConnectOnly(self):
         # Given
-        duration = 2
-        uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
-        uuid = '12345678-1234-5678-1234-56789abcdef0'
+        self.assertFalse(self.device.Connected)
         
         # When
-        self.adapter.start_discovery()
-        time.sleep(duration)
-        d = self.adapter.get_devices()
-        self.adapter.stop_discovery();
+        self.device.connect(False)
         
         # Then
-        self.assertGreater(len(d), 0, 'No devices discovered within {} seconds.'.format(duration))
-    
-    def test_01_GetByServiceUUID(self):
-        # Given
-        duration = 2
-        service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
-        service_uuid = '12345678-1234-5678-1234-56789abcdef0'
+        self.assertTrue(self.device.Connected)
+        self.assertFalse(self.device.ServicesResolved)
         
         # When
-        self.adapter.start_discovery()
-        time.sleep(duration)
-        d = self.adapter.get_devices(service_uuid)
-        self.adapter.stop_discovery();
+        self.device.disconnect()
         
         # Then
-        self.assertGreater(len(d), 0, 'No devices discovered within {} seconds.'.format(duration))
+        self.assertFalse(self.device.Connected)
+    
+    def test_02_ConnectAndWaitForServices(self):
+        # Given
+        self.assertFalse(self.device.Connected)
+        
+        # When
+        self.device.connect()
+        
+        # Then
+        self.assertTrue(self.device.Connected)
+        self.assertTrue(self.device.ServicesResolved)
+        
+        # When
+        self.device.disconnect()
+        
+        # Then
+        self.assertFalse(self.device.Connected)
+    
+    def test_03_GetGattServices(self):
+        # Given
+        if not self.device.Connected:
+            self.device.connect()
+        
+        # When
+        services = self.device.get_gattservices()
+        
+        # Then
+        self.assertGreater(len(services), 0)
+        self.assertTrue(self.service_uuid in services.keys())
+        
+        # When
+        self.device.disconnect()
+        
+        # Then
+        self.assertFalse(self.device.Connected)
+    
 
 if __name__ == "__main__":
     import logging
