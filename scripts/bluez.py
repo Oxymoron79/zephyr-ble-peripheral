@@ -1,6 +1,8 @@
 import logging
 import threading
 import time
+from contextlib import contextmanager
+from queue import SimpleQueue
 from gi.repository import Gio, GLib
 
 __logger__ = logging.getLogger('bluez')
@@ -379,6 +381,30 @@ class GattCharacteristic(_BaseObject):
     def WriteValue(self, data):
         v = GLib.Variant('ay', bytearray(data))
         return self._proxy.call_sync('WriteValue', GLib.Variant.new_tuple(v, self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
+    
+    @contextmanager
+    def dbus_signal_notify(self):
+        """Get a context manager to receive notifications through a `queue.SimpleQueue` as `bytearray` items.
+        Uses the PropertiesChanged DBus signal to receive the notifications.
+        The contextmanager takes care of starting and stopping the notification emission.
+        
+        Example:
+        with gatt_char.dbus_signal_notify() as q:
+            # Receive 5 notifications
+            for i in range(5):
+                n = q.get()
+                print('Notification', i+1, ':', n)
+        """
+        sq = SimpleQueue()
+        def value_changed(proxy, changed, invalidated):
+            key = 'Value'
+            if key in changed.keys():
+                sq.put(bytearray(changed[key]))
+        hid = self._proxy.connect('g-properties-changed', value_changed)
+        self.StartNotify()
+        yield sq
+        self.StopNotify()
+        self._proxy.disconnect(hid)
 
 if __name__ == "__main__":
     from pprint import pprint
@@ -429,11 +455,10 @@ if __name__ == "__main__":
                 dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
                 dataChar = chars[dataCharUUID]
                 if dataChar:
-                    print('Start notify on', dataCharUUID)
-                    dataChar.StartNotify()
-                    time.sleep(5)
-                    print('Stop notify on', dataCharUUID)
-                    dataChar.StopNotify()
+                    with dataChar.dbus_signal_notify() as q:
+                        for i in range(5):
+                            n = q.get()
+                            print('Notification', i+1, ':', n)
             
             print('Disconnect', device)
             device.disconnect()
