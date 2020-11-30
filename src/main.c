@@ -42,6 +42,16 @@ static const struct bt_uuid_128 statistics_uuid = BT_UUID_INIT_128(
     0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
     0xd5, 0x58, 0xbf, 0xf5, 0x03, 0x01, 0x00, 0x00);
 
+typedef struct {
+    uint16_t interval_ms;
+    uint8_t data_length;
+} __attribute__((packed)) config_t; // Pack it so it is byte aligned!;
+
+static config_t config = {
+    .interval_ms = 100,
+    .data_length = 10
+};
+
 /**
  * @brief Callback triggered when the "Config" Characteristic gets read through BLE
  * @param conn Connection object.
@@ -54,7 +64,7 @@ static const struct bt_uuid_128 statistics_uuid = BT_UUID_INIT_128(
 static ssize_t config_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
                            uint16_t offset)
 {
-    return len;
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, &config, sizeof(config));
 }
 
 /**
@@ -71,6 +81,21 @@ static ssize_t config_write(struct bt_conn *conn, const struct bt_gatt_attr *att
                          uint16_t offset,
                          uint8_t flags)
 {
+    config_t *cfg = (config_t *)buf;
+
+    if (flags & BT_GATT_WRITE_FLAG_PREPARE) {
+        return 0;
+    }
+
+    if (offset + len > sizeof(config_t)) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+    }
+    config = *cfg;
+    printk("Wrote config:\n"
+           "- interval_ms: %u\n"
+           "- data_length: %u\n",
+           config.interval_ms,
+           config.data_length);
     return len;
 }
 
