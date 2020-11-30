@@ -20,7 +20,7 @@
  * Test Service UUID
  * 00000100-f5bf-58d5-9d17-172177d1316a
  ******************************************************************************/
-static struct bt_uuid_128 service = BT_UUID_INIT_128(
+static struct bt_uuid_128 service_uuid = BT_UUID_INIT_128(
     0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
     0xd5, 0x58, 0xbf, 0xf5, 0x00, 0x01, 0x00, 0x00);
 
@@ -124,24 +124,24 @@ static void data_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 }
 
 BT_GATT_SERVICE_DEFINE(
-    TestService,
-    BT_GATT_PRIMARY_SERVICE(&service),
+    service,
+    BT_GATT_PRIMARY_SERVICE(&service_uuid),
 
     /* Config Characteristic */
     BT_GATT_CHARACTERISTIC(&config_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, config_read, config_write, 0),
 
-    /* Calibration Characteristic */
-    BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
-    BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-
     /* Data Characteristic */
     BT_GATT_CHARACTERISTIC(&data_uuid.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE, NULL, NULL, 0),
-    BT_GATT_CCC(data_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
+    BT_GATT_CCC(data_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+    /* Statistics Characteristic */
+    BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
+    BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
     );
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-    BT_DATA(BT_DATA_UUID128_ALL, service.val, sizeof(service.val))
+    BT_DATA(BT_DATA_UUID128_ALL, service_uuid.val, sizeof(service_uuid.val))
 };
 
 static void connected(struct bt_conn *conn, uint8_t err)
