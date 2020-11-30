@@ -373,7 +373,8 @@ class GattCharacteristic(_BaseObject):
         return self._proxy.StopNotify()
     
     def ReadValue(self):
-        return self._proxy.call_sync('ReadValue', GLib.Variant.new_tuple(self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
+        value = self._proxy.call_sync('ReadValue', GLib.Variant.new_tuple(self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
+        return bytearray(value[0])
     
     def WriteValue(self, data):
         v = GLib.Variant('ay', bytearray(data))
@@ -381,6 +382,7 @@ class GattCharacteristic(_BaseObject):
 
 if __name__ == "__main__":
     from pprint import pprint
+    import struct
     logging.basicConfig(level=logging.INFO)
     try:
         mgr = Manager();
@@ -409,14 +411,29 @@ if __name__ == "__main__":
                 configCharUUID = '00000101-f5bf-58d5-9d17-172177d1316a'
                 configChar = chars[configCharUUID]
                 if configChar:
-                    print('Read ', configCharUUID)
+                    configFormat = 'HB'
+                    print('Read', configCharUUID)
                     data = configChar.ReadValue()
                     print('-> ', data)
+                    interval, data_len = struct.unpack(configFormat, data)
+                    print('interval:', interval)
+                    print('data_len:', data_len)
                     
-                    data = b'hello'
+                    interval = 1000
+                    data_len = 20
+                    data = struct.pack(configFormat, interval, data_len)
                     print('Write to', configCharUUID, data)
                     ret = configChar.WriteValue(data)
                     print('->', ret)
+                
+                dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
+                dataChar = chars[dataCharUUID]
+                if dataChar:
+                    print('Start notify on', dataCharUUID)
+                    dataChar.StartNotify()
+                    time.sleep(5)
+                    print('Stop notify on', dataCharUUID)
+                    dataChar.StopNotify()
             
             print('Disconnect', device)
             device.disconnect()
