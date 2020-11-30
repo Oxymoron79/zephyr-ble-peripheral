@@ -52,6 +52,8 @@ static config_t config = {
     .data_length = 10
 };
 
+static uint8_t data[256];
+
 /**
  * @brief Callback triggered when the "Config" Characteristic gets read through BLE
  * @param conn Connection object.
@@ -131,6 +133,17 @@ static void statistics_ccc_changed(const struct bt_gatt_attr *attr, uint16_t val
     }
 }
 
+static void data_work_handler(struct k_work *work);
+
+K_WORK_DEFINE(data_work, data_work_handler);
+
+static void data_timer_handler(struct k_timer *dummy)
+{
+    k_work_submit(&data_work);
+}
+
+K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
+
 /**
  * @brief Callback triggered when the "Data" Characteristic Notifications get enabled/disabled through BLE
  * @param attr
@@ -141,10 +154,14 @@ static void data_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
     if (value == 1)
     {
         printk("\"Data\" Characteristic Notifications got enabled\n");
+        /* start periodic timer that expires once every second */
+        k_timer_start(&data_timer, K_MSEC(config.interval_ms), K_MSEC(config.interval_ms));
     }
     else
     {
         printk("\"Data\" Characteristic Notifications got disabled\n");
+        /* stop periodic timer */
+        k_timer_stop(&data_timer);
     }
 }
 
@@ -163,6 +180,14 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
     BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
     );
+
+static void data_work_handler(struct k_work *work)
+{
+    int err = 0;
+    err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
+    if (err != 0)
+        printk("data_work_handler: bt_gatt_notify returned: %i\n", err);
+}
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -221,6 +246,11 @@ void main(void)
     const struct device *dev = device_get_binding(CONFIG_UART_CONSOLE_ON_DEV_NAME);
     uint32_t dtr = 0;
     int err;
+
+    for(uint8_t i=0; i<0xFF; i++)
+    {
+        data[i] = i;
+    }
 
     if (usb_enable(NULL))
     {
