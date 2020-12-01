@@ -3,6 +3,8 @@ import threading
 import time
 from contextlib import contextmanager
 from queue import SimpleQueue
+import os
+import select
 from gi.repository import Gio, GLib
 
 __logger__ = logging.getLogger('bluez')
@@ -374,6 +376,13 @@ class GattCharacteristic(_BaseObject):
     def StopNotify(self):
         return self._proxy.StopNotify()
     
+    def AcquireNotify(self):
+        fdl = Gio.UnixFDList()
+        v, fdl = self._proxy.call_with_unix_fd_list_sync('AcquireNotify', GLib.Variant.new_tuple(self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, fdl, None)
+        fdl_index, mtu = v.unpack()
+        fd = fdl.get(fdl_index)
+        return (fd, mtu)
+    
     def ReadValue(self):
         value = self._proxy.call_sync('ReadValue', GLib.Variant.new_tuple(self.OPTION_REQUEST), Gio.DBusCallFlags.NONE, -1, None)
         return bytearray(value[0])
@@ -405,6 +414,45 @@ class GattCharacteristic(_BaseObject):
         yield sq
         self.StopNotify()
         self._proxy.disconnect(hid)
+    
+    @contextmanager
+    def fd_notify(self):
+        """Get a context manager to receive notifications through a `queue.SimpleQueue` as `bytearray` items.
+        Uses the file descriptor returned by AcquireNotify to receive the notifications.
+        The contextmanager takes care of acquiring and closing the file descriptor.
+        
+        Example:
+        with gatt_char.fd_notify() as q:
+            # Receive 5 notifications
+            for i in range(5):
+                n = q.get()
+                print('Notification', i+1, ':', n)
+        """
+        sq = SimpleQueue()
+        fd, mtu = self.AcquireNotify()
+        class ReadFd(threading.Thread):
+            def __init__(self):
+                super().__init__()
+                self._run = True
+            
+            def run(self):
+                with select.epoll() as ep:
+                    ep.register(fd, select.EPOLLIN)
+                    while self._run:
+                        events = ep.poll(timeout=0.1, maxevents=10)
+                        for pollfd, _ in events:
+                            if pollfd == fd:
+                                n = os.read(fd, mtu)
+                                sq.put(n)
+            
+            def stop(self):
+                self._run = False
+        rdt = ReadFd()
+        rdt.start()
+        yield sq
+        rdt.stop()
+        rdt.join()
+        os.close(fd)
 
 if __name__ == "__main__":
     from pprint import pprint
@@ -455,7 +503,7 @@ if __name__ == "__main__":
                 dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
                 dataChar = chars[dataCharUUID]
                 if dataChar:
-                    with dataChar.dbus_signal_notify() as q:
+                    with dataChar.fd_notify() as q:
                         for i in range(5):
                             n = q.get()
                             print('Notification', i+1, ':', n)
