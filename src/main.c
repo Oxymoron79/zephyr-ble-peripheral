@@ -16,6 +16,14 @@
 #include <usb/usb_device.h>
 #include <zephyr.h>
 
+/* Configure the Connection Parameters
+ * See https://www.novelbits.io/ble-connection-intervals
+ */
+#define CONNECTION_INTERVAL_MIN       6 // N * 1.25ms => 7.5ms (7.5ms..4000ms)
+#define CONNECTION_INTERVAL_MAX     320 // N * 1.25ms => 400ms (7.5ms..4000ms)
+#define CONNECTION_LATENCY            0 //
+#define CONNECTION_TIMEOUT           40 // N * 10 ms => 400ms (100ms..32s)
+
 /*******************************************************************************
  * Test Service UUID
  * 00000100-f5bf-58d5-9d17-172177d1316a
@@ -194,21 +202,27 @@ static const struct bt_data ad[] = {
     BT_DATA(BT_DATA_UUID128_ALL, service_uuid.val, sizeof(service_uuid.val))
 };
 
-static void connected(struct bt_conn *conn, uint8_t err)
-{
-    if (err)
-    {
-        printk("Connection failed (err 0x%02x)\n", err);
+/**
+ * Requests an update of the Connection Parameters
+ * @param conn
+ * @param minInterval
+ * @param maxInterval
+ * @param latency
+ * @param timeout
+ * @return success
+ */
+static int update_le_conn_param(struct bt_conn *conn, uint16_t minInterval, uint16_t maxInterval, uint16_t latency, uint16_t timeout) {
+    int err;
+    printk("Setting the Connection Parameters: Interval min: %dms, Interval max: %dms, Latency: %d, timout: %dms.\n",
+            (uint32_t)((float)minInterval * 1.25), (uint32_t)((float)maxInterval * 1.25),
+            latency, timeout * 10);
+    struct bt_le_conn_param le_conn_param = BT_LE_CONN_PARAM_INIT( minInterval, maxInterval, latency, timeout);
+    err = bt_conn_le_param_update(conn, &le_conn_param);
+    if (err) {
+        printk("Failed to update connection parameters: %d\n", err);
+        return err;
     }
-    else
-    {
-        printk("Connected\n");
-    }
-}
-
-static void disconnected(struct bt_conn *conn, uint8_t reason)
-{
-    printk("Disconnected (reason 0x%02x)\n", reason);
+    return 0;
 }
 
 static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
@@ -222,6 +236,39 @@ static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
 static void le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency, uint16_t timeout)
 {
     printk("Connection parameters updated: interval: %d, latency: %d, timeout: %d\n", interval, latency, timeout);
+}
+
+
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+    if (err)
+    {
+        printk("Connection failed (err 0x%02x)\n", err);
+    }
+    else
+    {
+        printk("Connected\n");
+        /* Update the Data Length
+         * See https://punchthrough.com/maximizing-ble-throughput-part-3-data-length-extension-dle-2
+         * A max TX Length of 251 is the maximum we can get.
+         * The max TX Time is calculated out of it:
+         *   (251 + 14 bytes) * 8 bits  * 1 μs = 2120 μs */
+        printk("Setting the Data Length\n");
+        struct bt_conn_le_data_len_param conn_le_data_len_param;
+        conn_le_data_len_param.tx_max_len = 251;
+        conn_le_data_len_param.tx_max_time = 2120;
+        err = bt_conn_le_data_len_update(conn, &conn_le_data_len_param);
+        if (err) {
+            printk("Failed to Update Data Length: %d!\n", err);
+        }
+
+        update_le_conn_param(conn, CONNECTION_INTERVAL_MIN, CONNECTION_INTERVAL_MAX, CONNECTION_LATENCY, CONNECTION_TIMEOUT);
+    }
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+    printk("Disconnected (reason 0x%02x)\n", reason);
 }
 
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
