@@ -242,7 +242,7 @@ class Adapter(_BaseObject):
                 return check_fn(Device(self._bluez, device.get_object_path(), BLUEZ_DEVICE_INTERFACE))
             self._wait_object_added(BLUEZ_DEVICE_INTERFACE, check_object, timeout_ms)
         except BaseException as e:
-            print('discover_device: Caught exception: {}'.format(e))
+            __logger__.debug('discover_device: Caught exception: {}'.format(e))
             return None
         finally:
             __logger__.debug('%s: Stop discovering.', self._proxy.get_object_path())
