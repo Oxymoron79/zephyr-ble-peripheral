@@ -18,68 +18,68 @@ numDataNotifications = 10 # Number of notifications to receive from the data cha
 try:
     mgr = Manager();
     a = mgr.get_adapter('hci0')
-    print('Using', a)
+    print(f'Using {a}')
     
     serviceUUID = '00000100-f5bf-58d5-9d17-172177d1316a'
-    print('Discover device hosting the throughput service', serviceUUID, 'for 10 seconds')
+    print(f'Discover device hosting the throughput service {serviceUUID} for 10 seconds.')
     def check(device):
         uuids = device.UUIDs
-        log.debug('Check UUIDs: %s', uuids)
+        log.debug(f'Check UUIDs: {uuids}')
         return serviceUUID in uuids
     device = a.discover_device(check)
     if device:
         print('Found.')
-        print('Connect to', device)
+        print(f'Connect to {device}')
         device.connect()
         print('Done.')
         
         services = device.get_gattservices();
-        log.debug('GATT services: %s', services)
-        print('Check for throughput service', serviceUUID)
+        log.debug(f'GATT services: {services}')
+        print(f'Check for throughput service {serviceUUID}')
         if serviceUUID in services.keys():
             service = services[serviceUUID]
             print('Found.')
             
             chars = service.get_gattcharacteristics()
-            log.debug('GATT characteristics: %s', repr(chars))
+            log.debug(f'GATT characteristics: {chars!r}')
             configCharUUID = '00000101-f5bf-58d5-9d17-172177d1316a'
             configChar = chars[configCharUUID]
             if configChar:
                 configFormat = 'HB'
-                print('Read config characteristic', configCharUUID, 'parameters:')
+                print(f'Read config characteristic {configCharUUID} parameters:')
                 data = configChar.ReadValue()
-                log.debug('-> %s', data)
+                log.debug(f'-> {data}')
                 interval, data_len = struct.unpack(configFormat, data)
-                print('- interval:', interval, 'ms')
-                print('- data_len:', data_len, 'bytes')
+                print(f'- interval: {interval} ms')
+                print(f'- data_len: {data_len} bytes')
                 
-                print('Set config characteristic', configCharUUID, 'parameters:')
-                print('- interval:', configInterval, 'ms')
-                print('- data_len:', configDataLen, 'bytes')
+                print(f'Set config characteristic {configCharUUID} parameters:')
+                print(f'- interval: {configInterval} ms')
+                print(f'- data_len: {configDataLen} bytes')
                 data = struct.pack(configFormat, configInterval, configDataLen)
-                log.debug('Write to %s: %s', configCharUUID, data)
+                log.debug(f'Write to {configCharUUID}: {data}')
                 ret = configChar.WriteValue(data)
-                log.debug('-> %s', ret)
+                log.debug(f'-> {ret}')
                 print('Done.')
             
             dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
             dataChar = chars[dataCharUUID]
             if dataChar:
                 with dataChar.fd_notify() as q:
-                    print('Receive', numDataNotifications, 'notifications from data characteristic', dataCharUUID)
+                    print(f'Receive {numDataNotifications} notifications from data characteristic {dataCharUUID}')
                     startTs = time.time()
                     for i in range(numDataNotifications):
                         n = q.get()
                         NotificationTs = time.time()
-                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(NotificationTs - startTs):{1}.{3}}s')
+                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(NotificationTs - startTs):{1}.{3}} s')
         else:
-            print('Throughput service', serviceUUID, 'not found on', device)
-        print('Disconnect', device)
+            print(f'Throughput service {serviceUUID} not found on {device}')
+        print(f'Disconnect {device}')
         device.disconnect()
         print('Done.')
     else:
         print('Not found.')
 except BaseException as e:
-    print('Caught exception: {}'.format(e))
+    print(f'Caught exception: {e}')
     raise e
 print('Exit')
