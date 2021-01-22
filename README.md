@@ -77,3 +77,11 @@ $ nrfutil dfu usb-serial -pkg dongle.zip -p /dev/ttyACM0
 $ sudo btmgmt phy LE1MTX LE1MRX LE2MTX LE2MRX
 ```
 
+## BLE Throughput Test
+
+The `scripts` folder contains the Python script for the throughput test:
+
+```
+$ cd zephyr-ble-peripheral/scripts
+$ ./throughput_test.py
+```
