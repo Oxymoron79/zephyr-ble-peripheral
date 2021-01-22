@@ -26,18 +26,13 @@ class _BaseObject:
         self._proxy.connect('g-properties-changed', self.__properties_changed_log)
     
     def __repr__(self):
-        return '{}({}, {}, {})'.format(self.__class__.__name__,
-                                       repr('Bluez()'),
-                                       repr(self._proxy.get_object_path()),
-                                       repr(self._proxy.get_interface_name()))
+        return f'{self.__class__.__name__}(\'Bluez()\', {self._proxy.get_object_path()!r}, {self._proxy.get_interface_name()!r})'
     
     def __str__(self):
-        return '{} ({}, {})'.format(self.__class__.__name__,
-                                    self._proxy.get_object_path(),
-                                    self._proxy.get_interface_name())
+        return f'{self.__class__.__name__} ({self._proxy.get_object_path()}, {self._proxy.get_interface_name()})'
     
     def __properties_changed_log(self, proxy, changed, invalidated):
-        __logger__.debug('%s: Properties changed: %s', proxy.get_object_path(), changed.print_(True))
+        __logger__.debug(f'{proxy.get_object_path()}: Properties changed: {changed.print_(True)}')
     
     def __wait_property_changed(self, proxy, changed, invalidated):
         if self.__wait_condition:
@@ -141,12 +136,12 @@ class Manager:
         p = object.get_object_path()
         ifs = [i.get_interface_name() for i in object.get_interfaces()]
         self._objects[p] = ifs
-        __logger__.debug('Object added: %s: %s', p, str(ifs))
+        __logger__.debug(f'Object added: {p}: {ifs}')
     
     def __object_removed(self, om,  object):
         p = object.get_object_path()
         self._objects.pop(p, None)
-        __logger__.debug('Object removed: %s', p)
+        __logger__.debug(f'Object removed: {p}')
     
     def get_adapter(self, pattern=None):
         """Returns the first bluetooth adapter found.
@@ -164,7 +159,7 @@ class Manager:
             adapter = Adapter(self, path, BLUEZ_ADAPTER_INTERFACE)
             if not pattern or path.endswith(pattern) or pattern == adapter.Address:
                 return adapter
-        raise Exception("No bluetooth adapter found")
+        raise Exception('No bluetooth adapter found')
 
 class Adapter(_BaseObject):
     def __init__(self, bluez, object_path, interface_name):
@@ -188,7 +183,7 @@ class Adapter(_BaseObject):
         :Returns: `None`
         """
         if self.Discovering:
-            __logger__.info('%s: Already discovering.', self._proxy.get_object_path())
+            __logger__.info(f'{self._proxy.get_object_path()}: Already discovering.')
             return
         try:
             def check(properties):
@@ -199,7 +194,7 @@ class Adapter(_BaseObject):
             self._proxy.StartDiscovery()
             self._wait_property_change(check)
         except BaseException as e:
-            __logger__.error('%s: StartDiscovery failed: %s', self._proxy.get_object_path(), e)
+            __logger__.error(f'{self._proxy.get_object_path()}: StartDiscovery failed: {e}')
     
     def stop_discovery(self):
         """Stop device discovery.
@@ -207,7 +202,7 @@ class Adapter(_BaseObject):
         :Returns: `None`
         """
         if not self.Discovering:
-            __logger__.info('%s: Not discovering.', self._proxy.get_object_path())
+            __logger__.info(f'{self._proxy.get_object_path()}: Not discovering.')
             return
         try:
             def check(properties):
@@ -218,7 +213,7 @@ class Adapter(_BaseObject):
             self._proxy.StopDiscovery()
             self._wait_property_change(check)
         except BaseException as e:
-            __logger__.error('%s: StopDiscovery failed: %s', self._proxy.get_object_path(), e)
+            __logger__.error(f'{self._proxy.get_object_path()}: StopDiscovery failed: {e}')
     
     def get_devices(self, serviceUUID=None):
         """Get all devices associated with the adapter.
@@ -235,17 +230,17 @@ class Adapter(_BaseObject):
         for device in self.get_devices():
             if check_fn(device):
                 return device
-        __logger__.debug('%s: Start discovering.', self._proxy.get_object_path())
+        __logger__.debug(f'{self._proxy.get_object_path()}: Start discovering.')
         self.start_discovery()
         try:
             def check_object(device):
                 return check_fn(Device(self._bluez, device.get_object_path(), BLUEZ_DEVICE_INTERFACE))
             self._wait_object_added(BLUEZ_DEVICE_INTERFACE, check_object, timeout_ms)
         except BaseException as e:
-            __logger__.debug('discover_device: Caught exception: {}'.format(e))
+            __logger__.debug(f'{self._proxy.get_object_path()}: discover_device: Caught exception: {e}')
             return None
         finally:
-            __logger__.debug('%s: Stop discovering.', self._proxy.get_object_path())
+            __logger__.debug(f'{self._proxy.get_object_path()}: Stop discovering.')
             self.stop_discovery()
         for device in self.get_devices():
             if check_fn(device):
@@ -282,7 +277,7 @@ class Device(_BaseObject):
      
     def connect(self, wait_for_services=True, timeout_ms=10000):
         if self.Connected:
-            __logger__.info('%s: Already connected.', self._proxy.get_object_path())
+            __logger__.info(f'{self._proxy.get_object_path()}: Already connected.')
             return
         self._proxy.Connect()
         if self.Connected:
@@ -301,7 +296,7 @@ class Device(_BaseObject):
      
     def disconnect(self, timeout_ms=10000):
         if not self.Connected:
-            __logger__.info('%s: Not connected.', self._proxy.get_object_path())
+            __logger__.info(f'{self._proxy.get_object_path()}: Not connected.')
             return
         def check(properties):
             value = properties.lookup_value('Connected')
