@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 import struct
+import time
 
 from bluez import Manager
 
@@ -66,9 +67,11 @@ try:
             if dataChar:
                 with dataChar.fd_notify() as q:
                     print('Receive', numDataNotifications, 'notifications from data characteristic', dataCharUUID)
+                    startTs = time.time()
                     for i in range(numDataNotifications):
                         n = q.get()
-                        print('Notification', i+1, ':', len(n), 'bytes')
+                        NotificationTs = time.time()
+                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(NotificationTs - startTs):{1}.{3}}s')
         else:
             print('Throughput service', serviceUUID, 'not found on', device)
         print('Disconnect', device)
