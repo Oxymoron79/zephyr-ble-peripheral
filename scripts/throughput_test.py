@@ -9,6 +9,11 @@ logging.basicConfig(level=logging.INFO) # Set to DEBUG for debug logs of bluez m
 log = logging.getLogger('Throughput')
 log.setLevel(logging.INFO) # Set to DEBUG for debug logs of this script
 
+# Test parameters
+configInterval = 100 # Notification interval in milliseconds
+configDataLen = 200 # Notification data size in bytes
+numDataNotifications = 10 # Number of notifications to receive from the data characteristic
+
 try:
     mgr = Manager();
     a = mgr.get_adapter('hci0')
@@ -47,23 +52,21 @@ try:
                 print('- interval:', interval, 'ms')
                 print('- data_len:', data_len, 'bytes')
                 
-                interval = 100
-                data_len = 20
                 print('Set config characteristic', configCharUUID, 'parameters:')
-                print('- interval:', interval, 'ms')
-                print('- data_len:', data_len, 'bytes')
-                data = struct.pack(configFormat, interval, data_len)
+                print('- interval:', configInterval, 'ms')
+                print('- data_len:', configDataLen, 'bytes')
+                data = struct.pack(configFormat, configInterval, configDataLen)
                 log.debug('Write to %s: %s', configCharUUID, data)
                 ret = configChar.WriteValue(data)
                 log.debug('-> %s', ret)
+                print('Done.')
             
             dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
             dataChar = chars[dataCharUUID]
             if dataChar:
                 with dataChar.fd_notify() as q:
-                    numNotifications = 10
-                    print('Receive', numNotifications, 'notifications from data characteristic', dataCharUUID)
-                    for i in range(numNotifications):
+                    print('Receive', numDataNotifications, 'notifications from data characteristic', dataCharUUID)
+                    for i in range(numDataNotifications):
                         n = q.get()
                         print('Notification', i+1, ':', len(n), 'bytes')
         else:
