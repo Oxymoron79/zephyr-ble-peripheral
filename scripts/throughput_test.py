@@ -34,7 +34,7 @@ try:
     a = mgr.get_adapter('hci0')
     print(f'Using {a}')
     
-    serviceUUID = '00000100-f5bf-58d5-9d17-172177d1316a'
+    serviceUUID = 'abcdef00-f5bf-58d5-9d17-172177d1316a'
     print(f'Discover device hosting the throughput service {serviceUUID} for 10 seconds.')
     def check(device):
         uuids = device.UUIDs
@@ -56,7 +56,7 @@ try:
             
             chars = service.get_gattcharacteristics()
             log.debug(f'GATT characteristics: {chars!r}')
-            configCharUUID = '00000101-f5bf-58d5-9d17-172177d1316a'
+            configCharUUID = 'abcdef01-f5bf-58d5-9d17-172177d1316a'
             configChar = chars[configCharUUID]
             if configChar:
                 configFormat = 'HB'
@@ -76,7 +76,7 @@ try:
                 log.debug(f'-> {ret}')
                 print('Done.')
             
-            dataCharUUID = '00000102-f5bf-58d5-9d17-172177d1316a'
+            dataCharUUID = 'abcdef02-f5bf-58d5-9d17-172177d1316a'
             dataChar = chars[dataCharUUID]
             if dataChar:
                 with dataChar.fd_notify() as q:

@@ -10,14 +10,14 @@ The Firmware of the Bluetooth LE 5 Peripheral and the Dongle are built with the 
 Bluetooth LE 5 Peripheral Firmware for the [Nordic nRF52840 Dongle](https://docs.zephyrproject.org/latest/boards/arm/nrf52840dongle_nrf52840/doc/index.html)
 using the [Zephyr RTOS](https://zephyrproject.org).
 
-The Peripheral hosts a GATT service (UUID: 00000100-f5bf-58d5-9d17-172177d1316a) that contains the following
+The Peripheral hosts a GATT service (UUID: abcdef00-f5bf-58d5-9d17-172177d1316a) that contains the following
 GATT characteristics:
 
-Configuration (UUID: 00000101-f5bf-58d5-9d17-172177d1316a, R/W):
+Configuration (UUID: abcdef01-f5bf-58d5-9d17-172177d1316a, R/W):
 * `interval_ms` (`uint16_t`): The interval in milliseconds at with notifications are sent on the Data characeristic.
 * `data_length` (`uint8_t`): The size in bytes of each notification.
 
-Data (UUID: 00000102-f5bf-58d5-9d17-172177d1316a, R/N): The notifications of this characteristic are used to transfer
+Data (UUID: abcdef02-f5bf-58d5-9d17-172177d1316a, R/N): The notifications of this characteristic are used to transfer
 the data. For simple verification, each notification data is just a byte array with incrementing values:
 `[0x00, 0x01, ... data_length-1]`.  
 When notifications are enabled, a [Kernel Timer](https://docs.zephyrproject.org/latest/reference/kernel/timing/timers.html)

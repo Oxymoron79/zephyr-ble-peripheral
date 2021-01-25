@@ -57,7 +57,7 @@ class TestCase02_AdapterClass(unittest.TestCase):
         # Given
         a = self.manager.get_adapter()
         timeout = 5000
-        service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
+        service_uuid = 'abcdef00-f5bf-58d5-9d17-172177d1316a'
         def check(device):
             uuids = device.UUIDs
             return service_uuid in uuids
@@ -90,7 +90,7 @@ class TestCase03_DeviceClass(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = bluez.Manager()
         cls.adapter = cls.manager.get_adapter()
-        cls.service_uuid = '00000100-f5bf-58d5-9d17-172177d1316a'
+        cls.service_uuid = 'abcdef00-f5bf-58d5-9d17-172177d1316a'
         timeout = 2000
         def check(device):
             uuids = device.UUIDs
