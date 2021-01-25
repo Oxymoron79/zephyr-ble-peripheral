@@ -81,11 +81,20 @@ try:
             if dataChar:
                 with dataChar.fd_notify() as q:
                     print(f'Receive {numDataNotifications} notifications from data characteristic {dataCharUUID}')
-                    startTs = time.time()
+                    startTime = time.time()
+                    notificationCount = 0
+                    dataSize = 0
                     for i in range(numDataNotifications):
                         n = q.get()
-                        NotificationTs = time.time()
-                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(NotificationTs - startTs):{1}.{3}} s')
+                        notificationTime = time.time()
+                        notificationCount += 1
+                        dataSize += len(n)
+                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(notificationTime - startTime):{1}.{3}} s')
+                    endTime = time.time()
+                    throughput = dataSize * 8 / (endTime - startTime) / 1000
+                    print(f'Summary: Received {dataSize} bytes in {notificationCount} notificattions '
+                          f'during {endTime - startTime:.{3}} seconds: '
+                          f'{throughput:.3f} kbits/sec.')
         else:
             print(f'Throughput service {serviceUUID} not found on {device}')
         print(f'Disconnect {device}')
