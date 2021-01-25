@@ -278,13 +278,24 @@ void le_phy_updated(struct bt_conn *conn, struct bt_conn_le_phy_info *param)
 }
 #endif
 
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+void le_data_len_updated(struct bt_conn *conn, struct bt_conn_le_data_len_info *info)
+{
+  printk("Data length updated: TX: max_len: %d, max_time: %d - RX: max_len: %d, max_time: %d\n",
+         info->tx_max_len, info->tx_max_time, info->rx_max_len, info->rx_max_time);
+}
+#endif
+
 static struct bt_conn_cb conn_callbacks = {
     .connected = connected,
     .disconnected = disconnected,
     .le_param_req = le_param_req,
-    .le_param_updated = le_param_updated
+    .le_param_updated = le_param_updated,
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
-    .le_phy_updated = le_phy_updated;
+    .le_phy_updated = le_phy_updated,
+#endif
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+    .le_data_len_updated = le_data_len_updated,
 #endif
 };
 
