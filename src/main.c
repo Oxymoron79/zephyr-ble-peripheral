@@ -301,8 +301,6 @@ static struct bt_conn_cb conn_callbacks = {
 
 void main(void)
 {
-    const struct device *dev = device_get_binding(CONFIG_UART_CONSOLE_ON_DEV_NAME);
-    uint32_t dtr = 0;
     int err;
 
     for(uint8_t i=0; i<0xFF; i++)
@@ -313,12 +311,6 @@ void main(void)
     if (usb_enable(NULL))
     {
         return;
-    }
-
-    /* Poll if the DTR flag was set, optional */
-    while (!dtr)
-    {
-        uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
     }
 
     if (strlen(CONFIG_UART_CONSOLE_ON_DEV_NAME) != strlen("CDC_ACM_0")

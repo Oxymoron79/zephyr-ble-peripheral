@@ -55,12 +55,12 @@ $ nrfutil pkg generate --hw-version 52 --sd-req=0x00 --application zephyr/zephyr
 $ nrfutil dfu usb-serial -pkg peripheral.zip -p /dev/ttyACM0
 ```
 
-## Connect to Zephyr Console
+## (Optional) Connect to Zephyr Console
 
 The firmware has the USB console enabled (based of `samples/subsys/usb/console`) for kernel and application logs.
 The bluetooth stack is configured to log debug messages.
 
-When running the peripheral, make sure to connect to the USB console:
+When running the peripheral, the USB console can be accessed with a serial port program, e.g.:
 
 ```
 $ minicom -D /dev/ttyACM0
@@ -111,9 +111,7 @@ $ cd zephyr-ble-peripheral/scripts
 $ ./throughput_test.py
 ```
 
-Before running the script make sure
-* to connect to the Zephyr console of the BLE peripheral
-* that 2MBit PHY support is enabled in BlueZ
+Before running the script make sure that 2MBit PHY support is enabled in BlueZ.
 
 The script
 1. discovers a peripheral that advertises the Throughput GATT service
