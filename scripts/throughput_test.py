@@ -2,11 +2,12 @@
 import logging
 import struct
 import time
+import argparse
 
 from bluez import Manager
 
+# Setup logging
 logging.basicConfig(level=logging.INFO) # Set to DEBUG for debug logs of bluez module
-
 log = logging.getLogger('Throughput')
 log.setLevel(logging.INFO) # Set to DEBUG for debug logs of this script
 
@@ -14,6 +15,19 @@ log.setLevel(logging.INFO) # Set to DEBUG for debug logs of this script
 configInterval = 100 # Notification interval in milliseconds
 configDataLen = 200 # Notification data size in bytes
 numDataNotifications = 10 # Number of notifications to receive from the data characteristic
+
+# Command line arguments
+parser = argparse.ArgumentParser(description='Throughput test.')
+parser.add_argument('-i', '--interval', type=int, help = 'Notification interval in milliseconds')
+parser.add_argument('-l', '--length', type=int, help = 'Notification data size in bytes')
+parser.add_argument('-n', '--num', type=int, help = 'Number of notifications to receive')
+args = parser.parse_args()
+if args.interval:
+    configInterval = args.interval
+if args.length:
+    configDataLen = args.length
+if args.num:
+    numDataNotifications = args.num
 
 try:
     mgr = Manager();
