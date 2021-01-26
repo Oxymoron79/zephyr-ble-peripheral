@@ -13,7 +13,7 @@ using the [Zephyr RTOS](https://zephyrproject.org).
 The Peripheral hosts a GATT service (UUID: `abcdef00-f5bf-58d5-9d17-172177d1316a`) that contains the following
 GATT characteristics:
 
-Configuration (UUID: abcdef01-f5bf-58d5-9d17-172177d1316a, R/W):
+Configuration (UUID: `abcdef01-f5bf-58d5-9d17-172177d1316a`, R/W):
 * `interval_ms` (`uint16_t`): The interval in milliseconds at which notifications are sent on the Data characteristic.
 * `data_length` (`uint8_t`): The size in bytes of each notification.
 
