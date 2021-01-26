@@ -213,10 +213,10 @@ static const struct bt_data ad[] = {
  */
 static int update_le_conn_param(struct bt_conn *conn, uint16_t minInterval, uint16_t maxInterval, uint16_t latency, uint16_t timeout) {
     int err;
-    printk("Setting the Connection Parameters: Interval min: %dms, Interval max: %dms, Latency: %d, timout: %dms.\n",
+    printk("Update Connection Parameters: Interval min: %dms, Interval max: %dms, Latency: %d, timeout: %dms.\n",
             (uint32_t)((float)minInterval * 1.25), (uint32_t)((float)maxInterval * 1.25),
             latency, timeout * 10);
-    struct bt_le_conn_param le_conn_param = BT_LE_CONN_PARAM_INIT( minInterval, maxInterval, latency, timeout);
+    struct bt_le_conn_param le_conn_param = BT_LE_CONN_PARAM_INIT(minInterval, maxInterval, latency, timeout);
     err = bt_conn_le_param_update(conn, &le_conn_param);
     if (err) {
         printk("Failed to update connection parameters: %d\n", err);
@@ -238,6 +238,32 @@ static void le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t l
     printk("Connection parameters updated: interval: %d, latency: %d, timeout: %d\n", interval, latency, timeout);
 }
 
+static void print_conn_info(struct bt_conn *conn)
+{
+    struct bt_conn_info info;
+    int err = bt_conn_get_info(conn, &info);
+    if (err)
+    {
+        printk("Could not get connection information!\n");
+        return;
+    }
+    printk("Connection Information:\n");
+    printk("* Role: ");
+    if (info.role == BT_CONN_ROLE_MASTER)
+        printk("Master.\n");
+    else
+        printk("Slave.\n");
+    if(info.type & BT_CONN_TYPE_LE)
+    {
+        printk("* Connection Type: LE\n");
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+        const struct bt_conn_le_data_len_info *data_len_info = info.le.data_len;
+        printk("  Data Length: TX Max length: %d, TX Max time: %dus, RX Max length: %d, RX Max time: %dus.\n",
+                    data_len_info->tx_max_len, data_len_info->tx_max_time,
+                    data_len_info->rx_max_len, data_len_info->rx_max_time);
+#endif /* defined(CONFIG_BT_USER_DATA_LEN_UPDATE) */
+    }
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -248,12 +274,14 @@ static void connected(struct bt_conn *conn, uint8_t err)
     else
     {
         printk("Connected\n");
+        print_conn_info(conn);
+
         /* Update the Data Length
          * See https://punchthrough.com/maximizing-ble-throughput-part-3-data-length-extension-dle-2
          * A max TX Length of 251 is the maximum we can get.
          * The max TX Time is calculated out of it:
          *   (251 + 14 bytes) * 8 bits  * 1 μs = 2120 μs */
-        printk("Setting the Data Length\n");
+        printk("Update Data Length.\n");
         struct bt_conn_le_data_len_param conn_le_data_len_param;
         conn_le_data_len_param.tx_max_len = 251;
         conn_le_data_len_param.tx_max_time = 2120;
@@ -281,8 +309,8 @@ void le_phy_updated(struct bt_conn *conn, struct bt_conn_le_phy_info *param)
 #if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
 void le_data_len_updated(struct bt_conn *conn, struct bt_conn_le_data_len_info *info)
 {
-  printk("Data length updated: TX: max_len: %d, max_time: %d - RX: max_len: %d, max_time: %d\n",
-         info->tx_max_len, info->tx_max_time, info->rx_max_len, info->rx_max_time);
+    printk("Data Length updated: TX Max length: %d, TX Max time: %dus, RX Max length: %d, RX Max time: %dus\n",
+           info->tx_max_len, info->tx_max_time, info->rx_max_len, info->rx_max_time);
 }
 #endif
 
