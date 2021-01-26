@@ -17,7 +17,7 @@ Configuration (UUID: `abcdef01-f5bf-58d5-9d17-172177d1316a`, R/W):
 * `interval_ms` (`uint16_t`): The interval in milliseconds at which notifications are sent on the Data characteristic.
 * `data_length` (`uint8_t`): The size in bytes of each notification.
 
-Data (UUID: abcdef02-f5bf-58d5-9d17-172177d1316a, R/N): The notifications of this characteristic are used to transfer
+Data (UUID: `abcdef02-f5bf-58d5-9d17-172177d1316a`, R/N): The notifications of this characteristic are used to transfer
 the data. For simple verification, each notification data is just a byte array with incrementing values:
 `[0x00, 0x01, ... data_length-1]`.  
 When notifications are enabled, a [Kernel Timer](https://docs.zephyrproject.org/latest/reference/kernel/timing/timers.html)
