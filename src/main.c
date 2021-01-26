@@ -256,6 +256,24 @@ static void print_conn_info(struct bt_conn *conn)
     if(info.type & BT_CONN_TYPE_LE)
     {
         printk("* Connection Type: LE\n");
+#if defined(CONFIG_BT_USER_PHY_UPDATE)
+        /* -> bluetooth/gap.h
+         * LE PHY types
+         * enum {
+         * // Convenience macro for when no PHY is set.
+         * BT_GAP_LE_PHY_NONE                    = 0,
+         * // LE 1M PHY
+         * BT_GAP_LE_PHY_1M                      = BIT(0),
+         * //LE 2M PHY
+         * BT_GAP_LE_PHY_2M                      = BIT(1),
+         * // LE Coded PHY
+         * BT_GAP_LE_PHY_CODED                   = BIT(2),
+         * };
+         */
+        const struct bt_conn_le_phy_info *phy_info = info.le.phy;
+        printk("  PHY: TX: 0x%02X, RX: 0x%02X.\n", phy_info->tx_phy, phy_info->rx_phy);
+#endif /* defined(CONFIG_BT_USER_PHY_UPDATE) */
+
 #if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
         const struct bt_conn_le_data_len_info *data_len_info = info.le.data_len;
         printk("  Data Length: TX Max length: %d, TX Max time: %dus, RX Max length: %d, RX Max time: %dus.\n",
@@ -290,6 +308,13 @@ static void connected(struct bt_conn *conn, uint8_t err)
             printk("Failed to Update Data Length: %d!\n", err);
         }
 
+        printk("Update 2MBit PHY.\n");
+        struct bt_conn_le_phy_param conn_le_phy_param = BT_CONN_LE_PHY_PARAM_INIT(BT_GAP_LE_PHY_2M, BT_GAP_LE_PHY_2M);
+        err = bt_conn_le_phy_update(conn, &conn_le_phy_param);
+        if (err) {
+            printk("Failed to update connection parameters: %d\n", err);
+        }
+
         update_le_conn_param(conn, CONNECTION_INTERVAL_MIN, CONNECTION_INTERVAL_MAX, CONNECTION_LATENCY, CONNECTION_TIMEOUT);
     }
 }
@@ -302,7 +327,20 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
 void le_phy_updated(struct bt_conn *conn, struct bt_conn_le_phy_info *param)
 {
-    printk("PHY updated: RX: 0x%02X, TX: 0x%02X\n", param->rx_phy, param->tx_phy);
+    /* -> bluetooth/gap.h
+     * LE PHY types
+     * enum {
+     * // Convenience macro for when no PHY is set.
+     * BT_GAP_LE_PHY_NONE                    = 0,
+     * // LE 1M PHY
+     * BT_GAP_LE_PHY_1M                      = BIT(0),
+     * //LE 2M PHY
+     * BT_GAP_LE_PHY_2M                      = BIT(1),
+     * // LE Coded PHY
+     * BT_GAP_LE_PHY_CODED                   = BIT(2),
+     * };
+     */
+    printk("PHY updated: TX: 0x%02X, RX: 0x%02X\n", param->tx_phy, param->rx_phy);
 }
 #endif
 
