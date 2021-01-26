@@ -10,7 +10,7 @@ The Firmware of the Bluetooth LE 5 Peripheral and the Dongle are built with the 
 Bluetooth LE 5 Peripheral Firmware for the [Nordic nRF52840 Dongle](https://docs.zephyrproject.org/latest/boards/arm/nrf52840dongle_nrf52840/doc/index.html)
 using the [Zephyr RTOS](https://zephyrproject.org).
 
-The Peripheral hosts a GATT service (UUID: abcdef00-f5bf-58d5-9d17-172177d1316a) that contains the following
+The Peripheral hosts a GATT service (UUID: `abcdef00-f5bf-58d5-9d17-172177d1316a`) that contains the following
 GATT characteristics:
 
 Configuration (UUID: abcdef01-f5bf-58d5-9d17-172177d1316a, R/W):
