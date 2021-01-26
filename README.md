@@ -14,7 +14,7 @@ The Peripheral hosts a GATT service (UUID: abcdef00-f5bf-58d5-9d17-172177d1316a)
 GATT characteristics:
 
 Configuration (UUID: abcdef01-f5bf-58d5-9d17-172177d1316a, R/W):
-* `interval_ms` (`uint16_t`): The interval in milliseconds at with notifications are sent on the Data characeristic.
+* `interval_ms` (`uint16_t`): The interval in milliseconds at which notifications are sent on the Data characteristic.
 * `data_length` (`uint8_t`): The size in bytes of each notification.
 
 Data (UUID: abcdef02-f5bf-58d5-9d17-172177d1316a, R/N): The notifications of this characteristic are used to transfer
