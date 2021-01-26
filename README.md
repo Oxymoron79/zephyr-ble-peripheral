@@ -5,6 +5,8 @@ Linux host using two [Nordic nRF52840 Dongles](https://docs.zephyrproject.org/la
 
 The Firmware of the Bluetooth LE 5 Peripheral and the Dongle are built with the [Zephyr RTOS](https://zephyrproject.org).
 
+The instructions in this README require a Linux System that has BlueZ version 5.51 or newer running.
+
 # Zephyr BLE Peripheral
 
 Bluetooth LE 5 Peripheral Firmware for the [Nordic nRF52840 Dongle](https://docs.zephyrproject.org/latest/boards/arm/nrf52840dongle_nrf52840/doc/index.html)
