@@ -82,6 +82,7 @@ try:
                 with dataChar.fd_notify() as q:
                     print(f'Receive {numDataNotifications} notifications from data characteristic {dataCharUUID}')
                     startTime = time.time()
+                    lastNotificationTime = startTime
                     notificationCount = 0
                     dataSize = 0
                     for i in range(numDataNotifications):
@@ -89,7 +90,9 @@ try:
                         notificationTime = time.time()
                         notificationCount += 1
                         dataSize += len(n)
-                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(notificationTime - startTime):{1}.{3}} s')
+                        print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(notificationTime - startTime):{7}.{3}} s, '
+                              f'dt: {(notificationTime - lastNotificationTime):{7}.{3}} s')
+                        lastNotificationTime = notificationTime
                     endTime = time.time()
                     throughput = dataSize * 8 / (endTime - startTime) / 1000
                     print(f'Summary: Received {dataSize} bytes in {notificationCount} notificattions '
