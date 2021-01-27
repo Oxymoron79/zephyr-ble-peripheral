@@ -16,132 +16,54 @@
 #include <usb/usb_device.h>
 #include <zephyr.h>
 
-/*******************************************************************************
- * WRCD Service
- * See https://wiki.kistler.com/x/lAZWPw
- * 00000100-f5bf-58d5-9d17-172177d1316a
- ******************************************************************************/
-static struct bt_uuid_128 service = BT_UUID_INIT_128(
-    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
-    0xd5, 0x58, 0xbf, 0xf5, 0x00, 0x01, 0x00, 0x00);
+/* Configure the Connection Parameters
+ * See https://www.novelbits.io/ble-connection-intervals
+ */
+#define CONNECTION_INTERVAL_MIN       6 // N * 1.25ms => 7.5ms (7.5ms..4000ms)
+#define CONNECTION_INTERVAL_MAX     320 // N * 1.25ms => 400ms (7.5ms..4000ms)
+#define CONNECTION_LATENCY            0 //
+#define CONNECTION_TIMEOUT           40 // N * 10 ms => 400ms (100ms..32s)
 
 /*******************************************************************************
- * WRCD Service Characteristics
- * See https://wiki.kistler.com/x/lAZWPw
- * Channel Spec      (0x01): 00000101-f5bf-58d5-9d17-172177d1316a
- * Calibration       (0x02): 00000102-f5bf-58d5-9d17-172177d1316a
- * Status Message    (0x03): 00000103-f5bf-58d5-9d17-172177d1316a
- * Data              (0x04): 00000104-f5bf-58d5-9d17-172177d1316a
- * Calibration       (0x05): 00000105-f5bf-58d5-9d17-172177d1316a
+ * Test Service UUID
+ * abcdef00-f5bf-58d5-9d17-172177d1316a
  ******************************************************************************/
-static const struct bt_uuid_128 specCharacteristic = BT_UUID_INIT_128(
+static struct bt_uuid_128 service_uuid = BT_UUID_INIT_128(
     0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
-    0xd5, 0x58, 0xbf, 0xf5, 0x01, 0x01, 0x00, 0x00);
-
-static const struct bt_uuid_128 calibCharacteristic = BT_UUID_INIT_128(
-    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
-    0xd5, 0x58, 0xbf, 0xf5, 0x02, 0x01, 0x00, 0x00);
-
-static const struct bt_uuid_128 dataCharacteristic = BT_UUID_INIT_128(
-    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
-    0xd5, 0x58, 0xbf, 0xf5, 0x04, 0x01, 0x00, 0x00);
+    0xd5, 0x58, 0xbf, 0xf5, 0x00, 0xef, 0xcd, 0xab);
 
 /*******************************************************************************
- * Meta data
+ * Test Service Characteristics
+ * Config    : ABCDEF01-f5bf-58d5-9d17-172177d1316a
+ * Data      : ABCDEF02-f5bf-58d5-9d17-172177d1316a
+ * Statistics: ABCDEF03-f5bf-58d5-9d17-172177d1316a
  ******************************************************************************/
-struct range_s
-{
-    uint32_t physicalRange;
-    uint16_t adcRange;
-    double calibrationFactor;
+static const struct bt_uuid_128 config_uuid = BT_UUID_INIT_128(
+    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
+    0xd5, 0x58, 0xbf, 0xf5, 0x01, 0xef, 0xcd, 0xab);
+
+static const struct bt_uuid_128 data_uuid = BT_UUID_INIT_128(
+    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
+    0xd5, 0x58, 0xbf, 0xf5, 0x02, 0xef, 0xcd, 0xab);
+
+static const struct bt_uuid_128 statistics_uuid = BT_UUID_INIT_128(
+    0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d,
+    0xd5, 0x58, 0xbf, 0xf5, 0x03, 0xef, 0xcd, 0xab);
+
+typedef struct {
+    uint16_t interval_ms;
+    uint8_t data_length;
+} __attribute__((packed)) config_t; // Pack it so it is byte aligned!;
+
+static config_t config = {
+    .interval_ms = 100,
+    .data_length = 10
 };
 
-#define NUM_RANGES 4
-struct channel_s
-{
-    char name[8];
-    char unit[8];
-    struct range_s ranges[NUM_RANGES];
-};
-
-#define NUM_CHANNELS 4
-struct sensor_s
-{
-    char name[8];
-    int sn;
-    struct channel_s channels[NUM_CHANNELS];
-};
-
-static struct sensor_s sensor = {
-    // @formatter:off
-    .name = "Test",
-    .sn = 1234,
-    .channels = {
-        {
-            .name = "Ch1",
-            .unit = "N1",
-            .ranges = {
-                { .physicalRange = 110, .adcRange = 1100, .calibrationFactor = 1.1 },
-                { .physicalRange = 120, .adcRange = 1200, .calibrationFactor = 1.2 },
-                { .physicalRange = 130, .adcRange = 1300, .calibrationFactor = 1.3 },
-                { .physicalRange = 140, .adcRange = 1400, .calibrationFactor = 1.4 }
-            }
-        },
-        {
-            .name = "Ch2",
-            .unit = "N2",
-            .ranges = {
-                { .physicalRange = 210, .adcRange = 2100, .calibrationFactor = 2.1 },
-                { .physicalRange = 220, .adcRange = 2200, .calibrationFactor = 2.2 },
-                { .physicalRange = 230, .adcRange = 2300, .calibrationFactor = 2.3 },
-                { .physicalRange = 240, .adcRange = 2400, .calibrationFactor = 2.4 }
-            }
-        },
-        {
-            .name = "Ch3",
-            .unit = "N3",
-            .ranges = {
-                { .physicalRange = 310, .adcRange = 3100, .calibrationFactor = 3.1 },
-                { .physicalRange = 320, .adcRange = 3200, .calibrationFactor = 3.2 },
-                { .physicalRange = 330, .adcRange = 3300, .calibrationFactor = 3.3 },
-                { .physicalRange = 340, .adcRange = 3400, .calibrationFactor = 3.4 }
-            }
-        },
-        {
-            .name = "Ch4",
-            .unit = "N4",
-            .ranges = {
-                { .physicalRange = 410, .adcRange = 4100, .calibrationFactor = 4.1 },
-                { .physicalRange = 420, .adcRange = 4200, .calibrationFactor = 4.2 },
-                { .physicalRange = 430, .adcRange = 4300, .calibrationFactor = 4.3 },
-                { .physicalRange = 440, .adcRange = 4400, .calibrationFactor = 4.4 }
-            }
-        },
-    }
-};
-// @formatter:on
-
-void printSensor()
-{
-    printk("sensor.name: %s\n", sensor.name);
-    printk("sensor.sn: %d\n", sensor.sn);
-    for (int i = 0; i < NUM_CHANNELS; i++)
-    {
-        printk("sensor.channels[%d].name: %s\n", i, sensor.channels[i].name);
-        printk("sensor.channels[%d].unit: %s\n", i, sensor.channels[i].unit);
-        for (int j = 0; j < NUM_RANGES; j++)
-        {
-            printk("sensor.channels[%d].ranges[%d].physicalRange: %d\n", i, j,
-                   sensor.channels[i].ranges[j].physicalRange);
-            printk("sensor.channels[%d].ranges[%d].adcRange: %d\n", i, j, sensor.channels[i].ranges[j].adcRange);
-            printk("sensor.channels[%d].ranges[%d].calibrationFactor: %d\n", i, j,
-                   (int)(sensor.channels[i].ranges[j].calibrationFactor * 1000));
-        }
-    }
-}
+static uint8_t data[256];
 
 /**
- * @brief Callback triggered when the "Spec" Characteristic gets read through BLE
+ * @brief Callback triggered when the "Config" Characteristic gets read through BLE
  * @param conn Connection object.
  * @param attr Attribute to read.
  * @param buf Buffer to store the value.
@@ -149,34 +71,14 @@ void printSensor()
  * @param offset Start offset.
  * @return number of bytes read in case of success or negative values in case of error.
  */
-static ssize_t readSpec(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset)
+static ssize_t config_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
+                           uint16_t offset)
 {
-    uint8_t *wr8 = buf;
-    uint32_t *wr32;
-    ssize_t count = 0;
-    printk("readSpec\n");
-    for (int i = 0; i < NUM_CHANNELS; i++)
-    {
-        memcpy(wr8, sensor.channels[i].name, sizeof(sensor.channels[i].name));
-        wr8 += sizeof(sensor.channels[i].name);
-        memcpy(wr8, sensor.channels[i].unit, sizeof(sensor.channels[i].unit));
-        wr8 += sizeof(sensor.channels[i].unit);
-        *wr8++ = NUM_RANGES;
-        wr32 = (uint32_t*)wr8;
-        for (int j = 0; j < NUM_RANGES; j++)
-        {
-            *wr32++ = sensor.channels[i].ranges[j].physicalRange;
-            *wr32++ = sensor.channels[i].ranges[j].adcRange;
-        }
-        wr8 = (uint8_t*)wr32;
-    }
-    count = wr8 - ((uint8_t*)buf);
-    printk("readSpec: Wrote %d bytes.\n", count);
-    return count;
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, &config, sizeof(config));
 }
 
 /**
- * @brief Callback triggered when the "Spec" Characteristic gets written through BLE
+ * @brief Callback triggered when the "Config" Characteristic gets written through BLE
  * @param conn Connection object.
  * @param attr Attribute to write.
  * @param buf Buffer to store the value.
@@ -185,61 +87,30 @@ static ssize_t readSpec(struct bt_conn *conn, const struct bt_gatt_attr *attr, v
  * @param flags Write flags.
  * @return number of bytes read in case of success or negative values in case of error.
  */
-static ssize_t writeSpec(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
+static ssize_t config_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
                          uint16_t offset,
                          uint8_t flags)
 {
-    const uint8_t *rd8 = buf;
-    uint32_t *rd32;
-    uint8_t numRanges;
-    ssize_t count = 0;
-    if (flags & BT_GATT_WRITE_FLAG_PREPARE)
-    {
+    config_t *cfg = (config_t *)buf;
+
+    if (flags & BT_GATT_WRITE_FLAG_PREPARE) {
         return 0;
     }
-    printk("writeSpec\n");
-    for (int i = 0; i < NUM_CHANNELS; i++)
-    {
-        memcpy(sensor.channels[i].name, rd8, sizeof(sensor.channels[i].name));
-        sensor.channels[i].name[sizeof(sensor.channels[i].name) - 1] = 0x00;
-        rd8 += sizeof(sensor.channels[i].name);
-        memcpy(sensor.channels[i].unit, rd8, sizeof(sensor.channels[i].unit));
-        sensor.channels[i].unit[sizeof(sensor.channels[i].unit) - 1] = 0x00;
-        rd8 += sizeof(sensor.channels[i].unit);
-        numRanges = *rd8++;
-        rd32 = (uint32_t*)rd8;
-        for (int j = 0; j < numRanges; j++)
-        {
-            sensor.channels[i].ranges[j].physicalRange = *rd32++;
-            sensor.channels[i].ranges[j].adcRange = *rd32++;
-        }
-        rd8 = (uint8_t*)rd32;
+
+    if (offset + len > sizeof(config_t)) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
-    count = rd8 - ((uint8_t*)buf);
-    printk("writeSpec: Read %d bytes.\n", count);
-    printSensor();
+    config = *cfg;
+    printk("Wrote config:\n"
+           "- interval_ms: %u\n"
+           "- data_length: %u\n",
+           config.interval_ms,
+           config.data_length);
     return len;
 }
 
 /**
- * @brief Callback triggered when the "Spec" Characteristic Notifications get enabled/disabled through BLE
- * @param attr
- * @param value
- */
-static void spec_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
-{
-    if (value == 1)
-    {
-        printk("\"Spec\" Characteristic Notifications got enabled\n");
-    }
-    else
-    {
-        printk("\"Spec\" Characteristic Notifications got disabled\n");
-    }
-}
-
-/**
- * @brief Callback triggered when the "Calib" Characteristic gets read through BLE
+ * @brief Callback triggered when the "Statistics" Characteristic gets read through BLE
  * @param conn Connection object.
  * @param attr Attribute to read.
  * @param buf Buffer to store the value.
@@ -247,120 +118,170 @@ static void spec_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value
  * @param offset Start offset.
  * @return number of bytes read in case of success or negative values in case of error.
  */
-static ssize_t readCalib(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
-                         uint16_t offset)
+static ssize_t statistics_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
+                              uint16_t offset)
 {
-    uint8_t *wr8 = buf;
-    ssize_t count = 0;
-    printk("readCalib\n");
-    for (int i = 0; i < NUM_CHANNELS; i++)
-    {
-        *wr8++ = NUM_RANGES;
-        for (int j = 0; j < NUM_RANGES; j++)
-        {
-            memcpy(wr8, &sensor.channels[i].ranges[j].calibrationFactor,
-                   sizeof(sensor.channels[i].ranges[j].calibrationFactor));
-            wr8 += sizeof(sensor.channels[i].ranges[j].calibrationFactor);
-        }
-    }
-    count = wr8 - ((uint8_t*)buf);
-    printk("readCalib: Wrote %d bytes.\n", count);
-    return count;
-}
-
-/**
- * @brief Callback triggered when the "Calib" Characteristic gets written through BLE
- * @param conn Connection object.
- * @param attr Attribute to write.
- * @param buf Buffer to store the value.
- * @param len Buffer length.
- * @param offset Start offset.
- * @param flags Write flags.
- * @return number of bytes read in case of success or negative values in case of error.
- */
-static ssize_t writeCalib(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len,
-                          uint16_t offset,
-                          uint8_t flags)
-{
-    const uint8_t *rd8 = buf;
-    int numRanges;
-    ssize_t count = 0;
-    if (flags & BT_GATT_WRITE_FLAG_PREPARE)
-    {
-        return 0;
-    }
-    printk("writeCalib\n");
-    for (int i = 0; i < NUM_CHANNELS; i++)
-    {
-        numRanges = *rd8++;
-        for (int j = 0; j < numRanges; j++)
-        {
-            memcpy(&sensor.channels[i].ranges[j].calibrationFactor, rd8,
-                   sizeof(sensor.channels[i].ranges[j].calibrationFactor));
-            rd8 += sizeof(sensor.channels[i].ranges[j].calibrationFactor);
-        }
-    }
-    count = rd8 - ((uint8_t*)buf);
-    printk("writeCalib: Read %d bytes.\n", count);
-    printSensor();
     return len;
 }
 
 /**
- * @brief Callback triggered when the "Calib" Characteristic Notifications get enabled/disabled through BLE
+ * @brief Callback triggered when the "Statistics" Characteristic Notifications get enabled/disabled through BLE
  * @param attr
  * @param value
  */
-static void calib_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
+static void statistics_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
     if (value == 1)
     {
-        printk("\"Calib\" Characteristic Notifications got enabled\n");
+        printk("\"Statistics\" Characteristic Notifications got enabled\n");
     }
     else
     {
-        printk("\"Calib\" Characteristic Notifications got disabled\n");
+        printk("\"Statistics\" Characteristic Notifications got disabled\n");
     }
 }
+
+static void data_work_handler(struct k_work *work);
+
+K_WORK_DEFINE(data_work, data_work_handler);
+
+static void data_timer_handler(struct k_timer *dummy)
+{
+    k_work_submit(&data_work);
+}
+
+K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
 
 /**
  * @brief Callback triggered when the "Data" Characteristic Notifications get enabled/disabled through BLE
  * @param attr
  * @param value
  */
-static void data_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
+static void data_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
     if (value == 1)
     {
         printk("\"Data\" Characteristic Notifications got enabled\n");
+        /* start periodic timer that expires once every second */
+        k_timer_start(&data_timer, K_MSEC(config.interval_ms), K_MSEC(config.interval_ms));
     }
     else
     {
         printk("\"Data\" Characteristic Notifications got disabled\n");
+        /* stop periodic timer */
+        k_timer_stop(&data_timer);
     }
 }
 
 BT_GATT_SERVICE_DEFINE(
-    wrcdService,
-    BT_GATT_PRIMARY_SERVICE(&service),
+    service,
+    BT_GATT_PRIMARY_SERVICE(&service_uuid),
 
-    /* Channel Spec Characteristic */
-    BT_GATT_CHARACTERISTIC(&specCharacteristic.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, readSpec, writeSpec, 0),
-    BT_GATT_CCC(spec_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-
-    /* Calibration Characteristic */
-    BT_GATT_CHARACTERISTIC(&calibCharacteristic.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, readCalib, writeCalib, 0),
-    BT_GATT_CCC(calib_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    /* Config Characteristic */
+    BT_GATT_CHARACTERISTIC(&config_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, config_read, config_write, 0),
 
     /* Data Characteristic */
-    BT_GATT_CHARACTERISTIC(&dataCharacteristic.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, NULL, NULL, 0),
-    BT_GATT_CCC(data_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
+    BT_GATT_CHARACTERISTIC(&data_uuid.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE, NULL, NULL, 0),
+    BT_GATT_CCC(data_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+    /* Statistics Characteristic */
+    BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
+    BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
     );
+
+static void data_work_handler(struct k_work *work)
+{
+    int err = 0;
+    err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
+    if (err != 0)
+        printk("data_work_handler: bt_gatt_notify returned: %i\n", err);
+}
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-    BT_DATA_BYTES(BT_DATA_UUID128_ALL, 0x6a, 0x31, 0xd1, 0x77, 0x21, 0x17, 0x17, 0x9d, 0xd5, 0x58, 0xbf, 0xf5, 0x00, 0x01, 0x00, 0x00)
+    BT_DATA(BT_DATA_UUID128_ALL, service_uuid.val, sizeof(service_uuid.val))
 };
+
+/**
+ * Requests an update of the Connection Parameters
+ * @param conn
+ * @param minInterval
+ * @param maxInterval
+ * @param latency
+ * @param timeout
+ * @return success
+ */
+static int update_le_conn_param(struct bt_conn *conn, uint16_t minInterval, uint16_t maxInterval, uint16_t latency, uint16_t timeout) {
+    int err;
+    printk("Update Connection Parameters: Interval min: %dms, Interval max: %dms, Latency: %d, timeout: %dms.\n",
+            (uint32_t)((float)minInterval * 1.25), (uint32_t)((float)maxInterval * 1.25),
+            latency, timeout * 10);
+    struct bt_le_conn_param le_conn_param = BT_LE_CONN_PARAM_INIT(minInterval, maxInterval, latency, timeout);
+    err = bt_conn_le_param_update(conn, &le_conn_param);
+    if (err) {
+        printk("Failed to update connection parameters: %d\n", err);
+        return err;
+    }
+    return 0;
+}
+
+static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
+{
+    printk("Connection parameters update requested:\n"
+           "interval min/max: %d/%d, latency: %d, timeout: %d\n",
+           param->interval_min, param->interval_max, param->latency, param->timeout);
+    return true;
+}
+
+static void le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency, uint16_t timeout)
+{
+    printk("Connection parameters updated: interval: %d, latency: %d, timeout: %d\n", interval, latency, timeout);
+}
+
+static void print_conn_info(struct bt_conn *conn)
+{
+    struct bt_conn_info info;
+    int err = bt_conn_get_info(conn, &info);
+    if (err)
+    {
+        printk("Could not get connection information!\n");
+        return;
+    }
+    printk("Connection Information:\n");
+    printk("* Role: ");
+    if (info.role == BT_CONN_ROLE_MASTER)
+        printk("Master.\n");
+    else
+        printk("Slave.\n");
+    if(info.type & BT_CONN_TYPE_LE)
+    {
+        printk("* Connection Type: LE\n");
+#if defined(CONFIG_BT_USER_PHY_UPDATE)
+        /* -> bluetooth/gap.h
+         * LE PHY types
+         * enum {
+         * // Convenience macro for when no PHY is set.
+         * BT_GAP_LE_PHY_NONE                    = 0,
+         * // LE 1M PHY
+         * BT_GAP_LE_PHY_1M                      = BIT(0),
+         * //LE 2M PHY
+         * BT_GAP_LE_PHY_2M                      = BIT(1),
+         * // LE Coded PHY
+         * BT_GAP_LE_PHY_CODED                   = BIT(2),
+         * };
+         */
+        const struct bt_conn_le_phy_info *phy_info = info.le.phy;
+        printk("  PHY: TX: 0x%02X, RX: 0x%02X.\n", phy_info->tx_phy, phy_info->rx_phy);
+#endif /* defined(CONFIG_BT_USER_PHY_UPDATE) */
+
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+        const struct bt_conn_le_data_len_info *data_len_info = info.le.data_len;
+        printk("  Data Length: TX Max length: %d, TX Max time: %dus, RX Max length: %d, RX Max time: %dus.\n",
+                    data_len_info->tx_max_len, data_len_info->tx_max_time,
+                    data_len_info->rx_max_len, data_len_info->rx_max_time);
+#endif /* defined(CONFIG_BT_USER_DATA_LEN_UPDATE) */
+    }
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -371,6 +292,30 @@ static void connected(struct bt_conn *conn, uint8_t err)
     else
     {
         printk("Connected\n");
+        print_conn_info(conn);
+
+        /* Update the Data Length
+         * See https://punchthrough.com/maximizing-ble-throughput-part-3-data-length-extension-dle-2
+         * A max TX Length of 251 is the maximum we can get.
+         * The max TX Time is calculated out of it:
+         *   (251 + 14 bytes) * 8 bits  * 1 μs = 2120 μs */
+        printk("Update Data Length.\n");
+        struct bt_conn_le_data_len_param conn_le_data_len_param;
+        conn_le_data_len_param.tx_max_len = 251;
+        conn_le_data_len_param.tx_max_time = 2120;
+        err = bt_conn_le_data_len_update(conn, &conn_le_data_len_param);
+        if (err) {
+            printk("Failed to Update Data Length: %d!\n", err);
+        }
+
+        printk("Update 2MBit PHY.\n");
+        struct bt_conn_le_phy_param conn_le_phy_param = BT_CONN_LE_PHY_PARAM_INIT(BT_GAP_LE_PHY_2M, BT_GAP_LE_PHY_2M);
+        err = bt_conn_le_phy_update(conn, &conn_le_phy_param);
+        if (err) {
+            printk("Failed to update connection parameters: %d\n", err);
+        }
+
+        update_le_conn_param(conn, CONNECTION_INTERVAL_MIN, CONNECTION_INTERVAL_MAX, CONNECTION_LATENCY, CONNECTION_TIMEOUT);
     }
 }
 
@@ -379,46 +324,65 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     printk("Disconnected (reason 0x%02x)\n", reason);
 }
 
-static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
+#if defined(CONFIG_BT_USER_PHY_UPDATE)
+void le_phy_updated(struct bt_conn *conn, struct bt_conn_le_phy_info *param)
 {
-    printk("Connection parameters update requested\n");
-    return true;
+    /* -> bluetooth/gap.h
+     * LE PHY types
+     * enum {
+     * // Convenience macro for when no PHY is set.
+     * BT_GAP_LE_PHY_NONE                    = 0,
+     * // LE 1M PHY
+     * BT_GAP_LE_PHY_1M                      = BIT(0),
+     * //LE 2M PHY
+     * BT_GAP_LE_PHY_2M                      = BIT(1),
+     * // LE Coded PHY
+     * BT_GAP_LE_PHY_CODED                   = BIT(2),
+     * };
+     */
+    printk("PHY updated: TX: 0x%02X, RX: 0x%02X\n", param->tx_phy, param->rx_phy);
 }
+#endif
 
-static void le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency, uint16_t timeout)
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+void le_data_len_updated(struct bt_conn *conn, struct bt_conn_le_data_len_info *info)
 {
-    printk("Connection parameters updated: interval: %d, latency: %d, timeout: %d\n", interval, latency, timeout);
+    printk("Data Length updated: TX Max length: %d, TX Max time: %dus, RX Max length: %d, RX Max time: %dus\n",
+           info->tx_max_len, info->tx_max_time, info->rx_max_len, info->rx_max_time);
 }
+#endif
 
 static struct bt_conn_cb conn_callbacks = {
     .connected = connected,
     .disconnected = disconnected,
     .le_param_req = le_param_req,
-    .le_param_updated = le_param_updated
+    .le_param_updated = le_param_updated,
+#if defined(CONFIG_BT_USER_PHY_UPDATE)
+    .le_phy_updated = le_phy_updated,
+#endif
+#if defined(CONFIG_BT_USER_DATA_LEN_UPDATE)
+    .le_data_len_updated = le_data_len_updated,
+#endif
 };
 
 void main(void)
 {
-    const struct device *dev = device_get_binding(CONFIG_UART_CONSOLE_ON_DEV_NAME);
-    uint32_t dtr = 0;
     int err;
+
+    for(uint8_t i=0; i<0xFF; i++)
+    {
+        data[i] = i;
+    }
 
     if (usb_enable(NULL))
     {
         return;
     }
 
-    /* Poll if the DTR flag was set, optional */
-    while (!dtr)
-    {
-        uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
-    }
-
     if (strlen(CONFIG_UART_CONSOLE_ON_DEV_NAME) != strlen("CDC_ACM_0")
         || strncmp(CONFIG_UART_CONSOLE_ON_DEV_NAME, "CDC_ACM_0", strlen(CONFIG_UART_CONSOLE_ON_DEV_NAME)))
     {
         printk("Error: Console device name is not USB ACM\n");
-
         return;
     }
 
@@ -440,6 +404,4 @@ void main(void)
         return;
     }
     printk("Advertising successfully started\n");
-
-    printSensor();
 }
