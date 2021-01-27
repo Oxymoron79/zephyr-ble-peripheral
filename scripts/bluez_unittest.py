@@ -1,3 +1,5 @@
+# Copyright (c) 2021 Martin Roesch
+# SPDX-License-Identifier: Apache-2.0
 
 import unittest
 import time

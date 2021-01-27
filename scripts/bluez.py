@@ -1,3 +1,6 @@
+# Copyright (c) 2021 Martin Roesch
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import threading
 import time

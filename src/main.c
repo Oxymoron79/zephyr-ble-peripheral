@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Intel Corporation.
+ * Copyright (c) 2021 Martin Roesch
  *
  * SPDX-License-Identifier: Apache-2.0
  */
