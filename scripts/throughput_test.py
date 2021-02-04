@@ -89,19 +89,29 @@ try:
                     lastNotificationTime = startTime
                     notificationCount = 0
                     dataSize = 0
+                    stats = {
+                        "dt_min": 1.0,
+                        "dt_max": 0.0
+                        }
                     for i in range(numDataNotifications):
                         n = q.get()
                         notificationTime = time.time()
                         notificationCount += 1
                         dataSize += len(n)
+                        dt = notificationTime - lastNotificationTime
+                        if i > 1:
+                            if dt < stats["dt_min"]:
+                                stats["dt_min"] = dt
+                            if dt > stats["dt_max"]:
+                                stats["dt_max"] = dt
                         print(f'Notification {i+1:4}: {len(n):3} bytes, timestamp: {(notificationTime - startTime):{7}.{3}} s, '
-                              f'dt: {(notificationTime - lastNotificationTime):{7}.{3}} s')
+                              f'dt: {(dt):{7}.{3}} s')
                         lastNotificationTime = notificationTime
                     endTime = time.time()
                     throughput = dataSize * 8 / (endTime - startTime) / 1000
                     print(f'Summary: Received {dataSize} bytes in {notificationCount} notificattions '
-                          f'during {endTime - startTime:.{3}} seconds: '
-                          f'{throughput:.3f} kbits/sec.')
+                          f'during {endTime - startTime:.{3}} seconds: {throughput:.3f} kbits/sec.')
+                    print(f'min dt: {(stats["dt_min"]*1000):{7}.{3}} ms, max dt: {(stats["dt_max"]*1000):{7}.{3}} ms.')
         else:
             print(f'Throughput service {serviceUUID} not found on {device}')
         print(f'Disconnect {device}')
