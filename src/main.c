@@ -141,13 +141,42 @@ static void statistics_ccc_changed(const struct bt_gatt_attr *attr, uint16_t val
     }
 }
 
-static void data_work_handler(struct k_work *work);
-
-K_WORK_DEFINE(data_work, data_work_handler);
+/**
+ * BLE Notification FIFO.
+ *
+ * The FIFO buffers BLE notification requests (not the data),
+ * in case that bt_gatt_notify takes too long (i.e. longer than the data timer interval).
+ */
+struct k_fifo bt_fifo;
+struct fifo_item_t {
+    void *fifo_reserved;   /* 1st word reserved for use by FIFO */
+};
+struct fifo_item_t fifo_item;
+/* When stopping the data timer when notifications were disabled on the data characteristic,
+ * - the FIFO may still contain notification requests, that should not be sent.
+ * - the data_timer_handler may still be called once or twice?
+ * The notification_enabled flag is used to catch that.
+ */
+bool notifications_enabled;
 
 static void data_timer_handler(struct k_timer *dummy)
 {
-    k_work_submit(&data_work);
+    int err;
+    if(notifications_enabled)
+    {
+        /*
+         * Use k_fifo_alloc_put!
+         * Using k_fifo_put can cause k_fifo_get(&bt_fifo, K_FOREVER) to return a non-NULL value immediately
+         * even if the FIFO is empty.
+         */
+        err = k_fifo_alloc_put(&bt_fifo, &fifo_item);
+        if(err != 0)
+        {
+            printk("data_timer_handler k_fifo_put returned: %d\n", err);
+        }
+    }
+    else
+        printk("data_timer_handler called with notifications disabled!\n");
 }
 
 K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
@@ -162,13 +191,15 @@ static void data_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
     if (value == 1)
     {
         printk("\"Data\" Characteristic Notifications got enabled\n");
-        /* start periodic timer that expires once every second */
+        /* start periodic timer that expires in the configured interval */
+        notifications_enabled = true;
         k_timer_start(&data_timer, K_MSEC(config.interval_ms), K_MSEC(config.interval_ms));
     }
     else
     {
         printk("\"Data\" Characteristic Notifications got disabled\n");
         /* stop periodic timer */
+        notifications_enabled = false;
         k_timer_stop(&data_timer);
     }
 }
@@ -188,14 +219,6 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
     BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
     );
-
-static void data_work_handler(struct k_work *work)
-{
-    int err = 0;
-    err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
-    if (err != 0)
-        printk("data_work_handler: bt_gatt_notify returned: %i\n", err);
-}
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -404,4 +427,22 @@ void main(void)
         return;
     }
     printk("Advertising successfully started\n");
+
+    printk("Get data from FIFO.");
+    k_fifo_init(&bt_fifo);
+    while (1) {
+        if(k_fifo_get(&bt_fifo, K_FOREVER))
+        {
+            if(notifications_enabled)
+            {
+                err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
+                if (err != 0)
+                    printk("bt_gatt_notify returned: %i\n", err);
+            }
+            else
+            {
+                printk("Empty FIFO...\n");
+            }
+        }
+    }
 }
