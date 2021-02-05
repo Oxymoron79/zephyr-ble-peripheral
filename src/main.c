@@ -141,13 +141,86 @@ static void statistics_ccc_changed(const struct bt_gatt_attr *attr, uint16_t val
     }
 }
 
-static void data_work_handler(struct k_work *work);
+/**
+ * BLE Notification message queue.
+ *
+ * The message queue buffers BLE notification requests (not the data),
+ * in case that bt_gatt_notify takes too long (i.e. longer than the data timer interval).
+ */
+struct msg_t {
+    uint32_t num;
+};
 
-K_WORK_DEFINE(data_work, data_work_handler);
+/* Size of the message queue in number of messages. */
+#define BT_MSGQ_SIZE 1000
+
+/* Number of free messages in message queue when notification requests will be dropped,
+ * i.e. they will no not enqueued in the message queue.
+ */
+#define BT_MSGQ_DROP_LEVEL 2
+
+/* Number of free messages in message queue when notification requests will be enqueued again in the message queue,
+ * if they are currently being dropped.
+ */
+#define BT_MSGQ_HEALTHY_LEVEL 100
+
+K_MSGQ_DEFINE(bt_msgq, sizeof(struct msg_t), BT_MSGQ_SIZE, 4);
+
+struct msg_t bt_msg = { 0 };
+
+/* When stopping the data timer when notifications were disabled on the data characteristic,
+ * - the message queue may still contain notification requests, that should not be sent.
+ * - the data_timer_handler may still be called once or twice?
+ * The notification_enabled flag is used to catch that.
+ */
+bool notifications_enabled;
+
+/* If true, notification requests will be dropped */
+bool bt_msgq_drop = false;
+
+static void msgq_drop_log_work_handler(struct k_work *work)
+{
+    printk("Dropping notifications...\n");
+}
+K_WORK_DEFINE(msgq_drop_log_work, msgq_drop_log_work_handler);
+
+static void msgq_healthy_log_handler(struct k_work *work)
+{
+    printk("Message queue is healthy again...\n");
+}
+K_WORK_DEFINE(msgq_healthy_log_work, msgq_healthy_log_handler);
 
 static void data_timer_handler(struct k_timer *dummy)
 {
-    k_work_submit(&data_work);
+    int err;
+    uint32_t bt_msgq_free = 0;
+    if(notifications_enabled)
+    {
+        bt_msg.num++;
+        bt_msgq_free = k_msgq_num_free_get(&bt_msgq);
+        if (bt_msgq_free <= BT_MSGQ_DROP_LEVEL)
+        {
+            if(!bt_msgq_drop)
+                k_work_submit(&msgq_drop_log_work);
+            bt_msgq_drop = true;
+            return;
+        }
+        else if (bt_msgq_free > BT_MSGQ_HEALTHY_LEVEL)
+        {
+            if(bt_msgq_drop)
+                k_work_submit(&msgq_healthy_log_work);
+            bt_msgq_drop = false;
+        }
+        else if (bt_msgq_drop)
+            return;
+        err = k_msgq_put(&bt_msgq, &bt_msg, K_NO_WAIT);
+        if(err != 0)
+        {
+            printk("data_timer_handler: k_msgq_put returned: %d\n", err);
+        }
+    }
+    else
+        printk("data_timer_handler called with notifications disabled!\n");
 }
 
 K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
@@ -162,13 +235,16 @@ static void data_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
     if (value == 1)
     {
         printk("\"Data\" Characteristic Notifications got enabled\n");
-        /* start periodic timer that expires once every second */
+        notifications_enabled = true;
+        bt_msgq_drop = false;
+        /* start periodic timer that expires in the configured interval */
         k_timer_start(&data_timer, K_MSEC(config.interval_ms), K_MSEC(config.interval_ms));
     }
     else
     {
         printk("\"Data\" Characteristic Notifications got disabled\n");
         /* stop periodic timer */
+        notifications_enabled = false;
         k_timer_stop(&data_timer);
     }
 }
@@ -188,14 +264,6 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(&statistics_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, statistics_read, NULL, 0),
     BT_GATT_CCC(statistics_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
     );
-
-static void data_work_handler(struct k_work *work)
-{
-    int err = 0;
-    err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
-    if (err != 0)
-        printk("data_work_handler: bt_gatt_notify returned: %i\n", err);
-}
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -404,4 +472,27 @@ void main(void)
         return;
     }
     printk("Advertising successfully started\n");
+
+    printk("Get data from message queue.");
+    struct msg_t rx_msg;
+    while (1) {
+        err = k_msgq_get(&bt_msgq, &rx_msg, K_FOREVER);
+        if(err == 0)
+        {
+            if(notifications_enabled)
+            {
+                err = bt_gatt_notify(NULL, &service.attrs[3], data, config.data_length);
+                if (err != 0)
+                    printk("bt_gatt_notify returned: %i\n", err);
+            }
+//            else
+//            {
+//                printk("Empty FIFO...\n");
+//            }
+        }
+        else
+        {
+            printk("k_msgq_get returned: %i\n", err);
+        }
+    }
 }
