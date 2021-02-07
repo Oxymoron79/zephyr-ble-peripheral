@@ -141,13 +141,20 @@ static void statistics_ccc_changed(const struct bt_gatt_attr *attr, uint16_t val
     }
 }
 
+#define DATA_WORKQUEUE_STACK_SIZE 512
+#define DATA_WORKQUEUE_PRIORITY 5
+
+K_THREAD_STACK_DEFINE(data_workqueue_stack_area, DATA_WORKQUEUE_STACK_SIZE);
+
+struct k_work_q data_work_q;
+
 static void data_work_handler(struct k_work *work);
 
 K_WORK_DEFINE(data_work, data_work_handler);
 
 static void data_timer_handler(struct k_timer *dummy)
 {
-    k_work_submit(&data_work);
+    k_work_submit_to_queue(&data_work_q, &data_work);
 }
 
 K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
@@ -369,10 +376,15 @@ void main(void)
 {
     int err;
 
+    /* Initialize data */
     for(uint8_t i=0; i<0xFF; i++)
     {
         data[i] = i;
     }
+
+    /* Start data workqueue */
+    k_work_q_start(&data_work_q, data_workqueue_stack_area, K_THREAD_STACK_SIZEOF(data_workqueue_stack_area),
+                   DATA_WORKQUEUE_PRIORITY);
 
     if (usb_enable(NULL))
     {
