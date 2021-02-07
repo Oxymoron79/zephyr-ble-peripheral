@@ -149,12 +149,20 @@ K_THREAD_STACK_DEFINE(data_workqueue_stack_area, DATA_WORKQUEUE_STACK_SIZE);
 struct k_work_q data_work_q;
 
 static void data_work_handler(struct k_work *work);
-
 K_WORK_DEFINE(data_work, data_work_handler);
+
+static void pending_work_handler(struct k_work *work)
+{
+    printk("Work item pending...\n");
+}
+K_WORK_DEFINE(pending_work, pending_work_handler);
 
 static void data_timer_handler(struct k_timer *dummy)
 {
-    k_work_submit_to_queue(&data_work_q, &data_work);
+    if(k_work_pending(&data_work))
+        k_work_submit(&pending_work);
+    else
+        k_work_submit_to_queue(&data_work_q, &data_work);
 }
 
 K_TIMER_DEFINE(data_timer, data_timer_handler, NULL);
